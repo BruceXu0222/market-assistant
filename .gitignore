@@ -1,0 +1,71 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# 虚拟环境
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 测试
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# 日志
+*.log
+logs/
+
+# 数据文件（Parquet 文件可能很大）
+data/*.parquet
+data/XSHG_Stock_Snapshot_Level2_Day/
+data/XSHE_Stock_Snapshot_Level2_Day/
+
+# 配置文件（可能包含敏感信息）
+.env
+*.secret
+secrets/
+*.yaml
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 临时文件
+*.tmp
+temp/
+tmp/
+
+# 会话数据
+sessions.db
+sessions/
+
+# Streamlit
+.streamlit/secrets.toml

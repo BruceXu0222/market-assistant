@@ -1,0 +1,77 @@
+Date : 2026-01-28 16:15:30
+Directory : /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant
+Total : 38 files,  4736 codes, 2230 comments, 1163 blanks, all 8129 lines
+
+Languages
++------------------+------------+------------+------------+------------+------------+
+| language         | files      | code       | comment    | blank      | total      |
++------------------+------------+------------+------------+------------+------------+
+| Python           |         32 |      3,992 |      2,193 |      1,050 |      7,235 |
+| JSON             |          2 |        363 |          0 |          2 |        365 |
+| Markdown         |          2 |        227 |          0 |         78 |        305 |
+| YAML             |          1 |        129 |         27 |         23 |        179 |
+| pip requirements |          1 |         25 |         10 |         10 |         45 |
++------------------+------------+------------+------------+------------+------------+
+
+Directories
++----------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| path                                                                                   | files      | code       | comment    | blank      | total      |
++----------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| .                                                                                      |         38 |      4,736 |      2,230 |      1,163 |      8,129 |
+| . (Files)                                                                              |          8 |        746 |        130 |        216 |      1,092 |
+| .claude                                                                                |          1 |         13 |          0 |          1 |         14 |
+| app                                                                                    |          3 |        451 |        297 |        104 |        852 |
+| core                                                                                   |          7 |      1,638 |        786 |        272 |      2,696 |
+| core (Files)                                                                           |          6 |      1,509 |        759 |        249 |      2,517 |
+| core/configs                                                                           |          1 |        129 |         27 |         23 |        179 |
+| data                                                                                   |          1 |        350 |          0 |          1 |        351 |
+| tests                                                                                  |          7 |      1,062 |        339 |        315 |      1,716 |
+| workflow                                                                               |         11 |        476 |        678 |        254 |      1,408 |
+| workflow (Files)                                                                       |          2 |        258 |         84 |        100 |        442 |
+| workflow/nodes                                                                         |          9 |        218 |        594 |        154 |        966 |
++----------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+
+Files
++----------------------------------------------------------------------------------------+------------------+------------+------------+------------+------------+
+| filename                                                                               | language         | code       | comment    | blank      | total      |
++----------------------------------------------------------------------------------------+------------------+------------+------------+------------+------------+
+| /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant/.claude/settings.local.json     | JSON             |         13 |          0 |          1 |         14 |
+| /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant/README.md                       | Markdown         |        151 |          0 |         40 |        191 |
+| /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant/analyze_lastpx.py               | Python           |         47 |         14 |         16 |         77 |
+| /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant/app/__init__.py                 | Python           |          0 |          5 |          1 |          6 |
+| /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant/app/api.py                      | Python           |        209 |        220 |         28 |        457 |
+| /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant/app/ui_streamlit.py             | Python           |        242 |         72 |         75 |        389 |
+| /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant/core/__init__.py                | Python           |          0 |         10 |          1 |         11 |
+| /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant/core/configs/settings.yaml      | YAML             |        129 |         27 |         23 |        179 |
+| /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant/core/duckdb_engine.py           | Python           |         59 |        102 |         34 |        195 |
+| /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant/core/llm_client.py              | Python           |        154 |        106 |         39 |        299 |
+| /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant/core/llm_planner.py             | Python           |        515 |        169 |         40 |        724 |
+| /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant/core/path_resolver.py           | Python           |         77 |        124 |         39 |        240 |
+| /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant/core/sql_compiler.py            | Python           |        704 |        248 |         96 |      1,048 |
+| /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant/data/test.ipynb                 | JSON             |        350 |          0 |          1 |        351 |
+| /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant/demo.py                         | Python           |         79 |         31 |         26 |        136 |
+| /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant/deployment.md                   | Markdown         |         76 |          0 |         38 |        114 |
+| /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant/generate_mock_data.py           | Python           |         92 |         25 |         23 |        140 |
+| /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant/requirements.txt                | pip requirements |         25 |         10 |         10 |         45 |
+| /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant/simple_test.py                  | Python           |          9 |          0 |          5 |         14 |
+| /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant/test_enhancements.py            | Python           |        267 |         50 |         58 |        375 |
+| /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant/tests/__init__.py               | Python           |          0 |          6 |          1 |          7 |
+| /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant/tests/conftest.py               | Python           |         31 |         27 |         10 |         68 |
+| /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant/tests/test_integration.py       | Python           |        312 |         94 |        102 |        508 |
+| /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant/tests/test_llm_planner.py       | Python           |        359 |         90 |        106 |        555 |
+| /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant/tests/test_multi_turn.py        | Python           |         69 |         18 |         21 |        108 |
+| /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant/tests/test_plan_validate.py     | Python           |        138 |         34 |         35 |        207 |
+| /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant/tests/test_sql_compiler.py      | Python           |        153 |         70 |         40 |        263 |
+| /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant/workflow/__init__.py            | Python           |          0 |          5 |          1 |          6 |
+| /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant/workflow/graph.py               | Python           |        258 |         79 |         99 |        436 |
+| /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant/workflow/nodes/__init__.py      | Python           |          0 |         14 |          1 |         15 |
+| /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant/workflow/nodes/execute.py       | Python           |         25 |         77 |         22 |        124 |
+| /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant/workflow/nodes/memory_update.py | Python           |          4 |         77 |         16 |         97 |
+| /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant/workflow/nodes/narrate.py       | Python           |         26 |         75 |         14 |        115 |
+| /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant/workflow/nodes/plan_gen.py      | Python           |         61 |         70 |         29 |        160 |
+| /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant/workflow/nodes/postprocess.py   | Python           |         12 |         84 |         18 |        114 |
+| /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant/workflow/nodes/repair.py        | Python           |         30 |         91 |         13 |        134 |
+| /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant/workflow/nodes/router.py        | Python           |         25 |         67 |         20 |        112 |
+| /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant/workflow/nodes/validate.py      | Python           |         35 |         39 |         21 |         95 |
+| Total                                                                                  |                  |      4,736 |      2,230 |      1,163 |      8,129 |
++----------------------------------------------------------------------------------------+------------------+------------+------------+------------+------------+
