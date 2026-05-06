@@ -108,6 +108,7 @@ market-assistant/
 │   ├── test_sql_compiler.py
 │   └── test_plan_validate.py
 ├── data/                      # 数据目录（Parquet 文件）
+│   └── US_Stock_Snapshot_Level2_Day/tradingday=20250120/
 └── requirements.txt
 ```
 
@@ -126,6 +127,9 @@ LLM 只输出 QueryPlan（JSON），不输出 SQL：
   "output_fields": ["SecurityID", "LastPx", "涨幅"]
 }
 ```
+
+支持的市场代码：`XSHG`（上交所）、`XSHE`（深交所）、`US`（美股）、`ALL`（A股全部）。
+US mock 数据可通过 `python generate_us_mock_data.py` 重新生成。
 
 ### 字段白名单
 - LastPx, PreClosePx, TotalValueTrade, TotalVolumeTrade

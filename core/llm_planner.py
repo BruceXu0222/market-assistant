@@ -173,7 +173,8 @@ PLANNER_SYSTEM_PROMPT = """你是一个股票行情查询计划生成器。你�
 
 - XSHG: 上海证券交易所
 - XSHE: 深圳证券交易所
-- ALL: 全部市场（默认）
+- US: 美国股票市场（当用户提到美股、US stocks、American stocks、NYSE/Nasdaq 时使用）
+- ALL: A股全部市场（上海+深圳，默认）
 
 ## 输出格式
 
@@ -183,7 +184,7 @@ PLANNER_SYSTEM_PROMPT = """你是一个股票行情查询计划生成器。你�
 {
   "intent": "查询意图的简要描述",
   "date": "YYYYMMDD格式的日期",
-  "market": "XSHG/XSHE/ALL",
+  "market": "XSHG/XSHE/US/ALL",
   "select_fields": ["需要输出的字段列表"],
   "metrics": ["需要计算的衍生指标"],
   "filters": [
@@ -592,7 +593,7 @@ class LLMQueryPlanner:
 
         # 检查市场代码
         market = plan.get("market")
-        if market and market not in {"XSHG", "XSHE", "ALL"}:
+        if market and market not in {"XSHG", "XSHE", "US", "ALL"}:
             errors.append(f"市场代码无效: {market}")
 
         # 检查 limit

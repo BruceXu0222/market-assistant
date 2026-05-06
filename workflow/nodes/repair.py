@@ -44,7 +44,7 @@ REPAIR_SYSTEM_PROMPT = """
 - BidPrice1~5, OfferPrice1~5, BidVolume1~5, OfferVolume1~5
 - 涨幅, 振幅, 盘口差
 
-**市场代码白名单：** XSHG, XSHE, ALL
+**市场代码白名单：** XSHG, XSHE, US, ALL
 **操作符白名单：** >, <, =, >=, <=, !=
 """
 

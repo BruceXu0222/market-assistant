@@ -1,0 +1,6 @@
+#!/Users/brucexu/Desktop/UCLA/Capstone/market-assistant/market/bin/python
+import sys
+from isort.main import main
+if __name__ == '__main__':
+    sys.argv[0] = sys.argv[0].removesuffix('.exe')
+    sys.exit(main())

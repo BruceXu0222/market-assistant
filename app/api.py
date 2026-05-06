@@ -90,7 +90,7 @@ def resolve_parquet_paths(date: str, market: str) -> List[str]:
 
     Args:
         date: 日期（YYYYMMDD）
-        market: 市场代码（XSHG/XSHE/ALL）
+        market: 市场代码（XSHG/XSHE/US/ALL）
 
     Returns:
         parquet_paths: Parquet 文件路径列表
@@ -101,6 +101,7 @@ def resolve_parquet_paths(date: str, market: str) -> List[str]:
     market_dirs = {
         "XSHG": "XSHG_Stock_Snapshot_Level2_Day",
         "XSHE": "XSHE_Stock_Snapshot_Level2_Day",
+        "US": "US_Stock_Snapshot_Level2_Day",
     }
 
     if market == "ALL":
@@ -110,8 +111,9 @@ def resolve_parquet_paths(date: str, market: str) -> List[str]:
 
     for m in markets:
         if m in market_dirs:
-            pattern = DATA_ROOT / market_dirs[m] / f"*{date}*.parquet"
-            found = list(DATA_ROOT.glob(f"{market_dirs[m]}/*{date}*.parquet"))
+            found = list(DATA_ROOT.glob(f"{market_dirs[m]}/tradingday={date}/*.parquet"))
+            if not found:
+                found = list(DATA_ROOT.glob(f"{market_dirs[m]}/*{date}*.parquet"))
             paths.extend([str(p) for p in found])
 
     # 如果没找到真实数据，使用测试数据

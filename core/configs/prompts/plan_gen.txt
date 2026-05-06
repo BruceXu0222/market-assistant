@@ -49,7 +49,7 @@
 {
   "query_type": "basic | filter | stats | aggregation | anomaly | multi_turn | raw_data",
   "date": "YYYYMMDD",
-  "market": "XSHG | XSHE | ALL",
+  "market": "XSHG | XSHE | US | ALL",
   "metrics": ["涨幅", ...],
   "filters": [
     {"field": "TotalValueTrade", "op": ">", "value": 1000000000},
@@ -510,7 +510,8 @@
 2. **只使用白名单中的字段和指标**
 3. **日期格式必须是 YYYYMMDD**
 4. **如果用户没有指定日期，使用会话默认日期**
-5. **市场代码：XSHG=上交所, XSHE=深交所, ALL=全部**
+5. **市场代码：XSHG=上交所, XSHE=深交所, US=美股, ALL=A股全部（上海+深圳）**
+   - 用户提到“美股”、“美国股票”、“US stocks”、“American stocks”、“NYSE”或“Nasdaq”时，market 使用 "US"
 6. **涨停判断：普通股10%，创业板/科创板20%**
 7. **多轮对话时，理解上下文中的过滤条件和排序要求**
 8. **统计分析类查询使用 aggregations 字段**

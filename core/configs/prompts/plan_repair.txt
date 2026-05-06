@@ -12,7 +12,7 @@
 - BidPrice1~5, OfferPrice1~5, BidVolume1~5, OfferVolume1~5
 - 涨幅, 振幅, 盘口差
 
-**市场代码白名单：** XSHG, XSHE, ALL
+**市场代码白名单：** XSHG, XSHE, US, ALL
 **操作符白名单：** >, <, =, >=, <=, !=
 **日期格式：** YYYYMMDD
 **Limit 范围：** 1-1000
@@ -32,7 +32,7 @@
 
 校验错误：
 - 日期格式错误（应为 YYYYMMDD）: 2025-01-15
-- 市场代码无效（应为 XSHG/XSHE/ALL）: INVALID
+- 市场代码无效（应为 XSHG/XSHE/US/ALL）: INVALID
 - metrics 中指标不在白名单: 未知指标
 - filters 中字段不在白名单: Price
 - filters 中操作符不在白名单: >>

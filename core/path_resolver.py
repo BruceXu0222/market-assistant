@@ -17,6 +17,9 @@ data/
     tradingday=20250115/
       part-00000.parquet
       part-00001.parquet
+  US_Stock_Snapshot_Level2_Day/
+    tradingday=20250120/
+      part-00000.parquet
 """
 
 from typing import List, Optional
@@ -36,7 +39,10 @@ DATA_ROOT = Path(__file__).parent.parent / "data"
 MARKET_DIR_TEMPLATES = {
     "XSHG": "XSHG_Stock_Snapshot_Level2_Day",
     "XSHE": "XSHE_Stock_Snapshot_Level2_Day",
+    "US": "US_Stock_Snapshot_Level2_Day",
 }
+
+CHINA_MARKETS = ["XSHG", "XSHE"]
 
 
 # ============================================================================
@@ -77,7 +83,7 @@ class PathResolver:
 
         Args:
             date: 交易日（格式：YYYYMMDD）
-            market: 市场代码（XSHG/XSHE/ALL）
+            market: 市场代码（XSHG/XSHE/US/ALL）
 
         Returns:
             paths: Parquet 文件路径列表
@@ -96,7 +102,7 @@ class PathResolver:
 
         # 根据 market 确定需要扫描的目录
         if market == "ALL":
-            markets_to_scan = ["XSHG", "XSHE"]
+            markets_to_scan = CHINA_MARKETS
         else:
             markets_to_scan = [market]
 
@@ -136,7 +142,7 @@ class PathResolver:
 
         Args:
             date: 交易日（格式：YYYYMMDD）
-            market: 市场代码（XSHG/XSHE/ALL）
+            market: 市场代码（XSHG/XSHE/US/ALL）
 
         Returns:
             bool: 数据是否存在
@@ -156,7 +162,7 @@ class PathResolver:
         列出可用的交易日
 
         Args:
-            market: 市场代码（XSHG/XSHE/ALL）
+            market: 市场代码（XSHG/XSHE/US/ALL）
 
         Returns:
             dates: 交易日列表（格式：YYYYMMDD）
@@ -170,7 +176,7 @@ class PathResolver:
 
         # 根据 market 确定需要扫描的目录
         if market == "ALL":
-            markets_to_scan = ["XSHG", "XSHE"]
+            markets_to_scan = CHINA_MARKETS
         else:
             markets_to_scan = [market]
 
@@ -202,7 +208,7 @@ def resolve_parquet_paths(date: str, market: str) -> List[str]:
 
     Args:
         date: 交易日（格式：YYYYMMDD）
-        market: 市场代码（XSHG/XSHE/ALL）
+        market: 市场代码（XSHG/XSHE/US/ALL）
 
     Returns:
         paths: Parquet 文件路径列表

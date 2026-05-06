@@ -201,9 +201,9 @@ with st.sidebar:
 
     default_market = st.selectbox(
         "默认市场",
-        options=["ALL", "XSHG", "XSHE"],
+        options=["ALL", "XSHG", "XSHE", "US"],
         index=0,
-        help="XSHG=上交所, XSHE=深交所, ALL=全部",
+        help="XSHG=上交所, XSHE=深交所, US=美股, ALL=A股全部",
     )
 
     st.markdown("---")

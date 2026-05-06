@@ -148,7 +148,7 @@ class TestPlanValidation:
 
     def test_valid_markets(self):
         """测试所有有效的市场代码"""
-        valid_markets = ["XSHG", "XSHE", "ALL"]
+        valid_markets = ["XSHG", "XSHE", "US", "ALL"]
 
         for market in valid_markets:
             plan = {
