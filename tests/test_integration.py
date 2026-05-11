@@ -73,7 +73,7 @@ class TestLLMClient:
     def test_client_initialization(self, llm_client):
         """测试客户端初始化"""
         assert llm_client is not None
-        assert llm_client.model == "gpt-5.2"
+        assert llm_client.model == "gpt-5.5"
         assert "api.openai.com" in llm_client.base_url
         print(f"\n[测试] LLM 客户端初始化成功")
         print(f"  - 模型: {llm_client.model}")
@@ -155,8 +155,8 @@ class TestLLMPlanner:
         assert has_value_filter or "TotalValueTrade" in plan.get("select_fields", [])
 
     def test_zhangting_query(self, planner, default_date):
-        """测试涨停股查询"""
-        query = "今天涨停的股票有哪些"
+        """测试涨幅阈值查询"""
+        query = "今天涨幅超过10%的股票有哪些"
 
         plan, errors = planner.generate_plan(
             user_query=query,
@@ -164,15 +164,15 @@ class TestLLMPlanner:
             default_market="ALL"
         )
 
-        print(f"\n[测试] 涨停股查询")
+        print(f"\n[测试] 涨幅阈值查询")
         print(f"  - 输入: {query}")
         print(f"  - 计划: {json.dumps(plan, ensure_ascii=False, indent=2)}")
         print(f"  - 错误: {errors}")
 
-        # 验证使用了涨停相关指标或过滤
+        # 验证使用了涨幅阈值相关指标或过滤
         has_zhangting = (
-            "是否涨停" in plan.get("metrics", []) or
-            any(f.get("field") == "是否涨停" for f in plan.get("filters", [])) or
+            "涨幅" in plan.get("metrics", []) or
+            any(f.get("field") == "涨幅" for f in plan.get("filters", [])) or
             any("MaxPx" in str(f) or "ClosePx" in str(f) for f in plan.get("filters", []))
         )
         assert has_zhangting

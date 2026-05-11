@@ -37,7 +37,7 @@ class MockLLMClient:
         self.response_map = response_map or {}
         self.call_count = 0
 
-    def chat(self, prompt, system_prompt=None, temperature=0.1, max_tokens=1024):
+    def chat(self, prompt, system_prompt=None, temperature=1, max_tokens=1024):
         self.call_count += 1
 
         # 根据特定查询模式返回相应的响应
@@ -65,14 +65,14 @@ class MockLLMClient:
                 "limit": 100
             }, ensure_ascii=False)
 
-        if "涨停" in prompt:
+        if "涨幅超过" in prompt:
             return json.dumps({
-                "intent": "查询涨停股票",
+                "intent": "查询涨幅超过10%的股票",
                 "date": "20250115",
                 "market": "ALL",
-                "select_fields": ["SecurityID", "ClosePx", "PreClosePx", "MaxPx"],
-                "metrics": ["涨幅", "是否涨停"],
-                "filters": [{"field": "是否涨停", "op": "=", "value": 1}],
+                "select_fields": ["SecurityID", "ClosePx", "ChangePct"],
+                "metrics": ["涨幅"],
+                "filters": [{"field": "涨幅", "op": ">", "value": 10}],
                 "order_by": [{"field": "TotalValueTrade", "desc": True}],
                 "limit": 100
             }, ensure_ascii=False)
@@ -142,17 +142,16 @@ class TestFieldDefinitions:
         # 新增字段（来自 schema）
         assert "Symbol" in BASE_FIELDS
         assert "LastPx" in BASE_FIELDS
-        assert "NumTrades" in BASE_FIELDS
-        assert "TotalBidQty" in BASE_FIELDS
-        assert "TotalOfferQty" in BASE_FIELDS
+        assert "ChangePct" in BASE_FIELDS
+        assert "Amplitude" in BASE_FIELDS
+        assert "TurnoverRate" in BASE_FIELDS
 
     def test_derived_metrics_exist(self):
         """测试衍生指标是否已定义"""
         assert "涨幅" in DERIVED_METRICS
+        assert "跌幅" in DERIVED_METRICS
         assert "振幅" in DERIVED_METRICS
-        assert "是否涨停" in DERIVED_METRICS
-        assert "是否跌停" in DERIVED_METRICS
-        assert "买卖盘比" in DERIVED_METRICS
+        assert "换手率" in DERIVED_METRICS
 
     def test_all_allowed_fields_combined(self):
         """测试 ALL_ALLOWED_FIELDS 包含基础字段和衍生指标"""
@@ -214,29 +213,28 @@ class TestLLMQueryPlanner:
         assert len(plan.get("filters", [])) > 0
         assert errors == []
 
-    def test_generate_plan_limit_stop(self):
-        """测试涨停股查询的计划生成"""
-        # 使用返回涨停指标的特定模拟
-        class ZhangTingMockLLM:
+    def test_generate_plan_threshold_gain(self):
+        """测试涨幅阈值查询的计划生成"""
+        class ThresholdGainMockLLM:
             def chat(self, *args, **kwargs):
                 return json.dumps({
-                    "intent": "查询涨停股票",
+                    "intent": "查询涨幅超过10%的股票",
                     "date": "20250115",
                     "market": "ALL",
-                    "select_fields": ["SecurityID", "ClosePx"],
-                    "metrics": ["是否涨停", "涨幅"],
-                    "filters": [{"field": "是否涨停", "op": "=", "value": 1}],
+                    "select_fields": ["SecurityID", "ClosePx", "ChangePct"],
+                    "metrics": ["涨幅"],
+                    "filters": [{"field": "涨幅", "op": ">", "value": 10}],
                     "limit": 100
                 })
 
-        planner = LLMQueryPlanner(llm_client=ZhangTingMockLLM())
+        planner = LLMQueryPlanner(llm_client=ThresholdGainMockLLM())
         plan, errors = planner.generate_plan(
-            user_query="今天涨停的股票有哪些",
+            user_query="今天涨幅超过10%的股票有哪些",
             default_date="20250115"
         )
 
         assert plan is not None
-        assert "是否涨停" in plan.get("metrics", [])
+        assert "涨幅" in plan.get("metrics", [])
         assert errors == []
 
     def test_default_date_applied(self):
@@ -275,11 +273,11 @@ class TestLLMQueryPlanner:
         planner = LLMQueryPlanner(llm_client=NoMarketMockLLM())
         plan, errors = planner.generate_plan(
             user_query="涨幅前10",
-            default_market="XSHG"
+            default_market="HK"
         )
 
         # _apply_defaults 应填充市场
-        assert plan.get("market") == "XSHG"
+        assert plan.get("market") == "HK"
 
     def test_default_limit_applied(self, planner):
         """测试默认 limit 是否被正确应用"""
@@ -325,7 +323,7 @@ class TestPlanValidation:
         plan, errors = bad_planner.generate_plan("test query")
 
         assert len(errors) > 0
-        assert any("白名单" in err for err in errors)
+        assert any("allowed" in err for err in errors)
 
     def test_validate_invalid_date_format(self, planner):
         """测试验证能捕获无效日期格式"""
@@ -342,7 +340,7 @@ class TestPlanValidation:
         plan, errors = bad_planner.generate_plan("test query")
 
         assert len(errors) > 0
-        assert any("日期" in err for err in errors)
+        assert any("date" in err for err in errors)
 
     def test_validate_invalid_market(self, planner):
         """测试验证能捕获无效市场代码"""
@@ -359,7 +357,7 @@ class TestPlanValidation:
         plan, errors = bad_planner.generate_plan("test query")
 
         assert len(errors) > 0
-        assert any("市场" in err for err in errors)
+        assert any("market" in err for err in errors)
 
 
 # ============================================================================

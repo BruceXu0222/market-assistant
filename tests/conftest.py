@@ -26,7 +26,7 @@ def sample_query_plan():
     """
     return {
         "date": "20250115",
-        "market": "XSHG",
+        "market": "HK",
         "metrics": ["涨幅"],
         "filters": [
             {"field": "TotalValueTrade", "op": ">", "value": 1000000}

@@ -17,7 +17,7 @@ pip install -r requirements.txt
 llm:
   base_url: "https://api.openai.com/v1"
   api_key: "your-api-key"
-  model: "gpt-5.2"
+  model: "gpt-5.5"
 ```
 
 ## 启动服务

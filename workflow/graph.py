@@ -186,10 +186,14 @@ def execute_node(state: GraphState) -> GraphState:
     try:
         import duckdb
         from core.sql_compiler import SQLCompilerEnhanced
+        from core.path_resolver import resolve_parquet_paths
 
         # 1. 解析 Parquet 路径
         print(f"[5/8 Execute] 解析数据文件路径...")
-        parquet_paths = ["data/test.parquet"]  # 使用 mock 数据
+        parquet_paths = resolve_parquet_paths(
+            state["query_plan"].get("date"),
+            state["query_plan"].get("market", "ALL"),
+        )
 
         # 2. 编译 SQL
         print(f"[5/8 Execute] 编译 QueryPlan → SQL...")

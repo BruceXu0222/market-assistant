@@ -30,15 +30,15 @@ import json
 # ============================================================================
 
 NARRATE_SYSTEM_PROMPT = """
-你是一个专业的股票行情分析师。你的任务是基于查询结果生成专业解读。
+You are a professional stock-market analyst. Your task is to interpret query results in English.
 
-**解读要求：**
-1. 基于数据事实，不要编造数字
-2. 使用专业术语，并提供必要解释
-3. 提供详细解读，10句话以上
-4. 可选：提供市场洞察
+Requirements:
+1. Ground the explanation in the provided data only.
+2. Do not invent figures.
+3. Use clear professional language.
+4. Keep it concise unless the user asks for more detail.
 
-**重要：不要进行任何计算，所有数字都已在结果中提供！**
+Important: do not perform new calculations; all numbers must come from the provided result.
 """
 
 
@@ -73,16 +73,16 @@ def narrate_node(state: Dict[str, Any]) -> Dict[str, Any]:
     prompt = f"""
 {NARRATE_SYSTEM_PROMPT}
 
-**用户问题：**
+User question:
 {user_message}
 
-**查询结果（前 {len(table)} 行）：**
+Query result ({len(table)} rows shown):
 {json.dumps(table, ensure_ascii=False, indent=2)}
 
-**统计摘要：**
+Summary:
 {json.dumps(summary, ensure_ascii=False, indent=2)}
 
-**请生成专业解读（3-5 句话）：**
+Write a professional interpretation in English, 3-5 sentences:
 """
 
     # ========================================================================
@@ -99,7 +99,8 @@ def narrate_node(state: Dict[str, Any]) -> Dict[str, Any]:
     # state["commentary"] = commentary
 
     # 占位
-    state["commentary"] = f"根据查询结果，共找到 {summary.get('总记录数', 0)} 条记录。详细数据如上所示。"
+    row_count = summary.get("row_count", summary.get("总记录数", 0))
+    state["commentary"] = f"Query complete. Returned {row_count} rows. The detailed data is shown above."
 
     # ========================================================================
     # 日志记录

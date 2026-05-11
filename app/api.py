@@ -20,20 +20,22 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
 import uuid
 import duckdb
+import re
 from pathlib import Path
 
 # 导入核心模块
 from core.llm_client import LLMClient
 from core.llm_planner import LLMQueryPlanner
 from core.sql_compiler import SQLCompilerEnhanced
+from core.path_resolver import PathResolver
 
 # ============================================================================
 # FastAPI 应用初始化
 # ============================================================================
 
 app = FastAPI(
-    title="智能行情分析助手 API",
-    description="基于 LLM + DuckDB 的股票行情分析系统",
+    title="Market Assistant API",
+    description="LLM + DuckDB stock market analysis for HK and US daily data",
     version="2.0.0",
 )
 
@@ -53,6 +55,7 @@ app.add_middleware(
 llm_client: Optional[LLMClient] = None
 planner: Optional[LLMQueryPlanner] = None
 compiler: Optional[SQLCompilerEnhanced] = None
+path_resolver: Optional[PathResolver] = None
 
 # 会话状态管理（MVP: 内存字典）
 sessions: Dict[str, Dict[str, Any]] = {}
@@ -66,20 +69,24 @@ DATA_ROOT = Path("data")
 # ============================================================================
 
 def get_or_create_session(session_id: Optional[str] = None) -> str:
-    """获取或创建会话"""
+    """Get or create a session."""
     if session_id is None:
         session_id = str(uuid.uuid4())
 
     if session_id not in sessions:
-        # 默认使用昨天作为默认日期
-        yesterday = datetime.now() - timedelta(days=1)
+        latest_date = path_resolver.latest_available_date("ALL") if path_resolver else None
+        if not latest_date:
+            # Fallback to yesterday if the data catalog cannot be read.
+            yesterday = datetime.now() - timedelta(days=1)
+            latest_date = yesterday.strftime("%Y%m%d")
+
         sessions[session_id] = {
             "created_at": datetime.now().isoformat(),
-            "default_date": yesterday.strftime("%Y%m%d"),
+            "default_date": latest_date,
             "default_market": "ALL",
             "history": [],
         }
-        print(f"[API] 创建新会话: {session_id}")
+        print(f"[API] Created session: {session_id}")
 
     return session_id
 
@@ -90,78 +97,108 @@ def resolve_parquet_paths(date: str, market: str) -> List[str]:
 
     Args:
         date: 日期（YYYYMMDD）
-        market: 市场代码（XSHG/XSHE/US/ALL）
+        market: 市场代码（HK/US/ALL）
 
     Returns:
         parquet_paths: Parquet 文件路径列表
     """
-    paths = []
+    resolver = path_resolver or PathResolver(DATA_ROOT)
+    return resolver.resolve(date, market)
 
-    # 市场目录映射
-    market_dirs = {
-        "XSHG": "XSHG_Stock_Snapshot_Level2_Day",
-        "XSHE": "XSHE_Stock_Snapshot_Level2_Day",
-        "US": "US_Stock_Snapshot_Level2_Day",
-    }
 
-    if market == "ALL":
-        markets = ["XSHG", "XSHE"]
-    else:
-        markets = [market]
+def normalize_request_date(date_value: Optional[str]) -> Optional[str]:
+    """Normalize UI date values to YYYYMMDD."""
+    if not date_value:
+        return None
+    normalized = re.sub(r"\D", "", str(date_value))
+    return normalized[:8] if len(normalized) >= 8 else None
 
-    for m in markets:
-        if m in market_dirs:
-            found = list(DATA_ROOT.glob(f"{market_dirs[m]}/tradingday={date}/*.parquet"))
-            if not found:
-                found = list(DATA_ROOT.glob(f"{market_dirs[m]}/*{date}*.parquet"))
-            paths.extend([str(p) for p in found])
 
-    # 如果没找到真实数据，使用测试数据
-    if not paths:
-        test_path = DATA_ROOT / "test.parquet"
-        if test_path.exists():
-            paths = [str(test_path)]
-            print(f"[API] 未找到 {date} 的数据，使用测试数据")
+def normalize_request_market(market_value: Optional[str]) -> str:
+    """Normalize UI market values to the supported HK/US universe."""
+    market = (market_value or "ALL").upper()
+    return market if market in {"HK", "US", "ALL"} else "ALL"
 
-    return paths
+
+def infer_explicit_market(message: str) -> Optional[str]:
+    """Return a market only when the user explicitly mentions one."""
+    text = message.lower()
+    if (
+        any(token in message for token in ["港股", "香港", "港交所"])
+        or " hk" in f" {text} "
+        or "hong kong" in text
+        or any(name in text for name in ["tencent", "alibaba"])
+    ):
+        return "HK"
+    if any(token in message for token in ["美股", "美国", "纳斯达克", "纽交所"]) or any(
+        token in text for token in [" us ", "usa", "u.s.", "nasdaq", "nyse", "tesla", "apple", "nvidia", "microsoft", "amazon"]
+    ):
+        return "US"
+    if "全部" in message or "所有市场" in message or "all" in text:
+        return "ALL"
+    return None
+
+
+def extract_explicit_absolute_date(message: str) -> Optional[str]:
+    """Extract explicit calendar dates; relative words like 今天 use the selected default date."""
+    numeric_match = re.search(r"(\d{4})[-/]?(\d{1,2})[-/]?(\d{1,2})", message)
+    if numeric_match:
+        year, month, day = numeric_match.groups()
+        return f"{year}{int(month):02d}{int(day):02d}"
+
+    chinese_match = re.search(r"(\d{4})年(\d{1,2})月(\d{1,2})日", message)
+    if chinese_match:
+        year, month, day = chinese_match.groups()
+        return f"{year}{int(month):02d}{int(day):02d}"
+
+    return None
+
+
+def apply_ui_defaults_to_plan(plan: Dict[str, Any], message: str, default_date: str, default_market: str) -> Dict[str, Any]:
+    """
+    Keep sidebar defaults authoritative unless the user explicitly asks for another market/date.
+
+    This protects the deterministic data query from LLM prompt drift.
+    """
+    explicit_market = infer_explicit_market(message)
+    plan["market"] = explicit_market or default_market
+
+    explicit_date = extract_explicit_absolute_date(message)
+    if not plan.get("date_range"):
+        plan["date"] = explicit_date or default_date
+
+    return plan
 
 
 def generate_commentary(query: str, plan: Dict, result_count: int, summary: Dict) -> str:
-    """
-    使用 LLM 生成结果解读
-
-    Args:
-        query: 用户查询
-        plan: 查询计划
-        result_count: 结果数量
-        summary: 统计摘要
-
-    Returns:
-        commentary: 解读文本
-    """
+    """Generate a short English commentary for the query result."""
     global llm_client
 
     if not llm_client:
-        return f"查询完成，共返回 {result_count} 条记录。"
+        return f"Query complete. Returned {result_count} rows."
 
     try:
-        prompt = f"""用户查询：{query}
+        prompt = f"""User question: {query}
 
-查询结果摘要：
-- 返回记录数：{result_count}
-- 统计信息：{summary}
+Query plan:
+{plan}
 
-请用简洁专业的语言解读这个查询结果（2-3句话）："""
+Result summary:
+- Rows returned: {result_count}
+- Statistics: {summary}
+
+Write a concise professional interpretation in English, 2-3 sentences.
+Only use facts present in the summary/result metadata; do not invent numbers."""
 
         response = llm_client.chat(
             prompt=prompt,
-            temperature=0.3,
-            max_tokens=200,
+            temperature=1,
+            max_tokens=500,
         )
         return response.strip()
     except Exception as e:
-        print(f"[API] 生成解读失败: {e}")
-        return f"查询完成，共返回 {result_count} 条记录。"
+        print(f"[API] Commentary generation failed: {e}")
+        return f"Query complete. Returned {result_count} rows."
 
 
 # ============================================================================
@@ -169,26 +206,28 @@ def generate_commentary(query: str, plan: Dict, result_count: int, summary: Dict
 # ============================================================================
 
 class ChatRequest(BaseModel):
-    """聊天请求"""
-    message: str = Field(..., description="用户输入的自然语言", min_length=1)
-    session_id: Optional[str] = Field(None, description="会话 ID，不提供则创建新会话")
-    debug: bool = Field(False, description="是否返回 Debug 信息")
+    """Chat request."""
+    message: str = Field(..., description="User question in natural language", min_length=1)
+    session_id: Optional[str] = Field(None, description="Session ID; omitted creates a new session")
+    debug: bool = Field(False, description="Whether to return debug information")
+    default_date: Optional[str] = Field(None, description="Default trading date, YYYYMMDD")
+    default_market: Optional[str] = Field(None, description="Default market: HK/US/ALL")
 
 
 class ChatResponse(BaseModel):
-    """聊天响应"""
-    session_id: str = Field(..., description="会话 ID")
-    table: Optional[List[Dict[str, Any]]] = Field(None, description="结果表格")
-    summary: Optional[Dict[str, Any]] = Field(None, description="统计摘要")
-    commentary: str = Field(..., description="LLM 生成的专业解读")
+    """Chat response."""
+    session_id: str = Field(..., description="Session ID")
+    table: Optional[List[Dict[str, Any]]] = Field(None, description="Result table")
+    summary: Optional[Dict[str, Any]] = Field(None, description="Result summary")
+    commentary: str = Field(..., description="LLM-generated commentary")
     field_explanations: Optional[Dict[str, str]] = Field(
-        None, description="字段解释（复杂分析时提供）"
+        None, description="Optional field explanations"
     )
-    debug: Optional[Dict[str, Any]] = Field(None, description="调试信息")
+    debug: Optional[Dict[str, Any]] = Field(None, description="Debug information")
 
 
 class HealthResponse(BaseModel):
-    """健康检查响应"""
+    """Health check response."""
     status: str
     timestamp: str
     version: str
@@ -216,20 +255,33 @@ async def chat(request: ChatRequest):
         # 1. 获取或创建会话
         session_id = get_or_create_session(request.session_id)
         session_state = sessions[session_id]
+        requested_date = normalize_request_date(request.default_date)
+        requested_market = normalize_request_market(request.default_market)
 
-        print(f"[API] [{session_id[:8]}] 收到消息: {request.message}")
+        if requested_date:
+            session_state["default_date"] = requested_date
+        session_state["default_market"] = requested_market
 
-        # 2. 使用 LLM 生成查询计划
-        print(f"[API] 生成查询计划...")
+        print(f"[API] [{session_id[:8]}] Message: {request.message}")
+
+        # 2. Generate query plan
+        print("[API] Generating query plan...")
         plan, validation_errors = planner.generate_plan(
             user_query=request.message,
             default_date=session_state["default_date"],
             default_market=session_state["default_market"],
             context={"recent_queries": session_state["history"][-3:]} if session_state["history"] else None,
         )
+        plan = apply_ui_defaults_to_plan(
+            plan,
+            request.message,
+            session_state["default_date"],
+            session_state["default_market"],
+        )
+        validation_errors = planner._validate_plan(plan)
 
         if validation_errors:
-            print(f"[API] 计划验证警告: {validation_errors}")
+            print(f"[API] Plan validation warnings: {validation_errors}")
 
         # 确保 query_type 存在
         if not plan.get("query_type"):
@@ -242,8 +294,8 @@ async def chat(request: ChatRequest):
         if plan.get("query_type") in ["chat", "invalid"]:
             answer = plan.get(
                 "answer",
-                "抱歉，我不太理解您的问题。请尝试问一些关于股票行情的问题，"
-                "例如「今天涨幅前10的股票」或「成交额超过10亿的股票有哪些」。"
+                "Sorry, I did not understand the question. Try asking about HK/US stock data, "
+                "such as 'Which US stocks fell the most today?' or 'Show Tesla in January 2025'."
             )
 
             # 更新会话历史
@@ -272,14 +324,14 @@ async def chat(request: ChatRequest):
         )
 
         if not parquet_paths:
-            raise HTTPException(status_code=404, detail="未找到对应日期的数据文件")
+            raise HTTPException(status_code=404, detail="No matching data files found")
 
         # 4. 编译 SQL
-        print(f"[API] 编译 SQL...")
+        print("[API] Compiling SQL...")
         sql = compiler.compile(plan, parquet_paths)
 
         # 5. 执行 DuckDB 查询
-        print(f"[API] 执行查询...")
+        print("[API] Executing query...")
         conn = duckdb.connect(":memory:")
         df = conn.execute(sql).fetchdf()
         conn.close()
@@ -289,6 +341,7 @@ async def chat(request: ChatRequest):
         relevant_columns = set()
 
         # 始终显示股票标识
+        relevant_columns.add("Market")
         relevant_columns.add("SecurityID")
         relevant_columns.add("Symbol")
 
@@ -317,20 +370,17 @@ async def chat(request: ChatRequest):
 
         table_data = df_filtered.to_dict(orient='records')
         summary = {
-            "总记录数": len(df_filtered),
-            "列数": len(df_filtered.columns),
+            "row_count": len(df_filtered),
+            "column_count": len(df_filtered.columns),
         }
 
         # 添加数值列的统计信息
         for col in df_filtered.select_dtypes(include=['float64', 'int64']).columns[:3]:
             if col not in ["SecurityID"]:
-                summary[f"{col}_均值"] = round(df_filtered[col].mean(), 2) if not df_filtered[col].isna().all() else None
+                summary[f"{col}_mean"] = round(df_filtered[col].mean(), 2) if not df_filtered[col].isna().all() else None
 
-        # 7. 获取字段解释（复杂分析时）
+        # 7. HK/US 日线查询无需额外字段解释
         field_explanations = None
-        if plan.get("query_type") == "complex_analysis":
-            analysis_type = plan.get("analysis_type", "order_book_anomaly")
-            field_explanations = compiler.get_field_explanations(analysis_type)
 
         # 8. 生成解读
         commentary = generate_commentary(
@@ -362,13 +412,13 @@ async def chat(request: ChatRequest):
             } if request.debug else None,
         )
 
-        print(f"[API] 查询完成，返回 {len(table_data)} 条记录")
+        print(f"[API] Query complete, returned {len(table_data)} rows")
         return response
 
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[API] 处理请求时出错: {e}")
+        print(f"[API] Request handling failed: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
@@ -376,7 +426,7 @@ async def chat(request: ChatRequest):
 
 @app.get("/health", response_model=HealthResponse)
 async def health():
-    """健康检查接口"""
+    """Health check endpoint."""
     global llm_client
 
     llm_status = "unknown"
@@ -398,9 +448,9 @@ async def health():
 
 @app.get("/")
 async def root():
-    """根路径"""
+    """Root endpoint."""
     return {
-        "name": "智能行情分析助手 API",
+        "name": "Market Assistant API",
         "version": "2.0.0",
         "docs": "/docs",
     }
@@ -412,34 +462,39 @@ async def root():
 
 @app.on_event("startup")
 async def startup_event():
-    """应用启动时的初始化"""
-    global llm_client, planner, compiler
+    """Initialize application dependencies on startup."""
+    global llm_client, planner, compiler, path_resolver
 
-    print("[API] 启动智能行情分析助手...")
+    print("[API] Starting Market Assistant...")
 
     # 初始化 LLM 客户端
     try:
         llm_client = LLMClient()
-        print(f"[API] LLM 客户端初始化完成: {llm_client.model}")
+        print(f"[API] LLM client initialized: {llm_client.model}")
     except Exception as e:
-        print(f"[API] LLM 客户端初始化失败: {e}")
+        print(f"[API] LLM client initialization failed: {e}")
         llm_client = None
 
     # 初始化查询计划生成器
     planner = LLMQueryPlanner(llm_client)
-    print("[API] 查询计划生成器初始化完成")
+    print("[API] Query planner initialized")
 
     # 初始化 SQL 编译器
     compiler = SQLCompilerEnhanced()
-    print("[API] SQL 编译器初始化完成")
+    print("[API] SQL compiler initialized")
 
-    print("[API] 服务启动完成!")
+    # 初始化真实数据路径解析器
+    path_resolver = PathResolver(DATA_ROOT)
+    latest_date = path_resolver.latest_available_date("ALL")
+    print(f"[API] Path resolver initialized, latest available trading date: {latest_date or 'unknown'}")
+
+    print("[API] Service startup complete")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    """应用关闭时的清理"""
-    print("[API] 关闭智能行情分析助手...")
+    """Clean up on shutdown."""
+    print("[API] Shutting down Market Assistant...")
 
 
 # ============================================================================

@@ -108,7 +108,8 @@ market-assistant/
 │   ├── test_sql_compiler.py
 │   └── test_plan_validate.py
 ├── data/                      # 数据目录（Parquet 文件）
-│   └── US_Stock_Snapshot_Level2_Day/tradingday=20250120/
+│   ├── hk/                    # 港股历史日线，每只股票一个 parquet
+│   └── us/                    # 美股历史日线，每只股票一个 parquet
 └── requirements.txt
 ```
 
@@ -119,21 +120,21 @@ LLM 只输出 QueryPlan（JSON），不输出 SQL：
 ```json
 {
   "date": "20250115",
-  "market": "XSHG",
+  "market": "HK",
   "metrics": ["涨幅", "振幅"],
   "filters": [{"field": "TotalValueTrade", "op": ">", "value": 1000000}],
   "order_by": [{"field": "涨幅", "desc": true}],
   "limit": 10,
-  "output_fields": ["SecurityID", "LastPx", "涨幅"]
+  "output_fields": ["Market", "SecurityID", "Symbol", "ClosePx", "涨幅"]
 }
 ```
 
-支持的市场代码：`XSHG`（上交所）、`XSHE`（深交所）、`US`（美股）、`ALL`（A股全部）。
-US mock 数据可通过 `python generate_us_mock_data.py` 重新生成。
+支持的市场代码：`HK`（港股）、`US`（美股）、`ALL`（港股+美股）。
 
 ### 字段白名单
-- LastPx, PreClosePx, TotalValueTrade, TotalVolumeTrade
-- BidPrice1~5, OfferPrice1~5, BidVolume1~5, OfferVolume1~5
+- Market, MDDate, SecurityID, Symbol
+- OpenPx, ClosePx, HighPx, LowPx
+- TotalValueTrade, TotalVolumeTrade, ChangePct, Amplitude, TurnoverRate
 - 防止注入和字段不存在错误
 
 ### DuckDB SQL 编译

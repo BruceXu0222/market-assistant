@@ -26,14 +26,19 @@ from typing import Dict, Any
 MARKET_QUERY_KEYWORDS = [
     "涨幅", "跌幅", "排名", "前", "后", "TopK", "筛选", "成交额", "成交量",
     "买一", "卖一", "盘口", "股票", "振幅", "价格", "最高", "最低",
+    "stock", "stocks", "market", "gainer", "gainers", "decliner", "decliners",
+    "loser", "losers", "turnover", "volume", "price", "trend", "highest",
+    "lowest", "top", "rank", "ranking", "filter", "amplitude",
 ]
 
 FIELD_EXPLAIN_KEYWORDS = [
     "是什么", "什么意思", "解释", "含义", "定义", "字段",
+    "what is", "what does", "meaning", "explain", "definition", "field",
 ]
 
 CHITCHAT_KEYWORDS = [
     "你好", "谢谢", "再见", "帮助", "介绍", "你是谁",
+    "hello", "hi", "thanks", "thank you", "bye", "help", "who are you",
 ]
 
 
@@ -73,7 +78,7 @@ def router_node(state: Dict[str, Any]) -> Dict[str, Any]:
     if any(keyword in user_message for keyword in CHITCHAT_KEYWORDS):
         state["query_type"] = "chitchat"
         # TODO: 实现闲聊响应（简单模板或调用 LLM）
-        state["commentary"] = "您好！我是智能行情分析助手，可以帮您分析股票行情数据。请问您想查询什么？"
+        state["commentary"] = "Hello. I can help analyze HK and US daily stock data. What would you like to query?"
         return state
 
     # 判断是否为行情查询

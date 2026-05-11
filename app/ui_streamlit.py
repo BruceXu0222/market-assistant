@@ -1,13 +1,7 @@
 """
-Streamlit 演示界面
-=================
+Streamlit demo UI.
 
-功能：
-1. 提供类似 ChatGPT/Claude 的对话界面
-2. 展示查询结果和分析
-3. 可选 Debug 信息展示
-
-使用方式：
+Run:
     streamlit run app/ui_streamlit.py --server.port 8501
 """
 
@@ -27,7 +21,7 @@ API_BASE_URL = "http://localhost:8080"
 
 # 页面配置
 st.set_page_config(
-    page_title="智能行情分析助手",
+    page_title="Market Assistant",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -38,7 +32,6 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-/* 对话消息样式 */
 .user-message {
     background-color: #f0f2f6;
     padding: 15px;
@@ -54,14 +47,12 @@ st.markdown("""
     border: 1px solid #e0e0e0;
 }
 
-/* 输入框容器固定在底部 */
 .stChatInput {
     position: fixed;
     bottom: 0;
     width: 100%;
 }
 
-/* 隐藏 Streamlit 默认的页脚 */
 footer {
     visibility: hidden;
 }
@@ -86,7 +77,7 @@ if "debug_mode" not in st.session_state:
 # ============================================================================
 
 def check_api_health() -> bool:
-    """检查 API 服务是否可用"""
+    """Check whether the API service is reachable."""
     try:
         response = requests.get(f"{API_BASE_URL}/health", timeout=5)
         return response.status_code == 200
@@ -94,40 +85,46 @@ def check_api_health() -> bool:
         return False
 
 
-def call_chat_api(message: str, debug: bool = False) -> Optional[Dict[str, Any]]:
-    """调用 FastAPI /chat 接口"""
+def call_chat_api(
+    message: str,
+    debug: bool = False,
+    default_date: Optional[datetime] = None,
+    default_market: str = "ALL",
+) -> Optional[Dict[str, Any]]:
+    """Call the FastAPI /chat endpoint."""
     try:
+        default_date_value = default_date.strftime("%Y%m%d") if default_date else None
         response = requests.post(
             f"{API_BASE_URL}/chat",
             json={
                 "message": message,
                 "session_id": st.session_state.session_id,
                 "debug": debug,
+                "default_date": default_date_value,
+                "default_market": default_market,
             },
             timeout=60,
         )
         response.raise_for_status()
         data = response.json()
 
-        # 更新 session_id
         st.session_state.session_id = data.get("session_id")
 
         return data
 
     except requests.exceptions.ConnectionError:
-        return {"error": "无法连接到 API 服务，请确保已启动后端服务"}
+        return {"error": "Cannot connect to the API service. Please start the backend first."}
     except requests.exceptions.RequestException as e:
-        return {"error": f"API 调用失败: {e}"}
+        return {"error": f"API request failed: {e}"}
 
 
 def format_table(table_data: list) -> pd.DataFrame:
-    """格式化结果表格"""
+    """Format a result table for display."""
     if not table_data:
         return None
 
     df = pd.DataFrame(table_data)
 
-    # 格式化数值列
     for col in df.columns:
         if df[col].dtype in ['float64']:
             if df[col].abs().max() > 1e8:
@@ -138,31 +135,95 @@ def format_table(table_data: list) -> pd.DataFrame:
     return df
 
 
+def prepare_chart_data(table_data: list) -> Optional[Dict[str, Any]]:
+    """Build chart data for time-series or ranked result tables."""
+    if not table_data:
+        return None
+
+    df = pd.DataFrame(table_data)
+    if df.empty:
+        return None
+
+    numeric_cols = [
+        col for col in df.columns
+        if pd.api.types.is_numeric_dtype(pd.to_numeric(df[col], errors="coerce"))
+    ]
+
+    if "MDDate" in df.columns and "ClosePx" in df.columns and len(df) >= 2:
+        chart_df = df.copy()
+        chart_df["Date"] = pd.to_datetime(chart_df["MDDate"].astype(str), format="%Y%m%d", errors="coerce")
+        chart_df["ClosePx"] = pd.to_numeric(chart_df["ClosePx"], errors="coerce")
+        chart_df = chart_df.dropna(subset=["Date", "ClosePx"]).sort_values("Date")
+        if len(chart_df) >= 2:
+            return {
+                "type": "line",
+                "title": "Close Price Trend",
+                "data": chart_df.set_index("Date")[["ClosePx"]],
+            }
+
+    preferred_metrics = [
+        "涨幅", "ChangePct", "换手率", "TurnoverRate",
+        "TotalValueTrade", "TotalVolumeTrade", "Amplitude", "ClosePx",
+    ]
+    metric = next((col for col in preferred_metrics if col in numeric_cols), None)
+    if not metric:
+        return None
+
+    label_col = "Symbol" if "Symbol" in df.columns else "SecurityID" if "SecurityID" in df.columns else None
+    if not label_col:
+        return None
+
+    chart_df = df[[label_col, metric]].copy()
+    chart_df[metric] = pd.to_numeric(chart_df[metric], errors="coerce")
+    chart_df = chart_df.dropna(subset=[metric]).head(20)
+    if chart_df.empty:
+        return None
+
+    return {
+        "type": "bar",
+        "title": f"{metric} by Stock",
+        "data": chart_df.set_index(label_col),
+    }
+
+
+def render_result_chart(table_data: list) -> None:
+    """Render a chart when the query result has chartable data."""
+    chart = prepare_chart_data(table_data)
+    if not chart:
+        return
+
+    st.markdown("**Chart**")
+    if chart["type"] == "line":
+        st.line_chart(chart["data"], use_container_width=True)
+    else:
+        st.bar_chart(chart["data"], use_container_width=True)
+
+
 def render_debug_info(debug_info: Dict[str, Any]) -> None:
-    """渲染 Debug 信息"""
+    """Render debug information."""
     if not debug_info:
         return
 
-    with st.expander("调试信息", expanded=False):
+    with st.expander("Debug Info", expanded=False):
         if debug_info.get("validation_errors"):
-            st.warning(f"验证警告: {debug_info['validation_errors']}")
+            st.warning(f"Validation warnings: {debug_info['validation_errors']}")
 
-        st.markdown("**查询计划 (QueryPlan)**")
+        st.markdown("**QueryPlan**")
         st.json(debug_info.get("plan", {}))
 
-        st.markdown("**生成的 SQL**")
+        st.markdown("**Generated SQL**")
         st.code(debug_info.get("sql", ""), language="sql")
 
-        st.markdown("**数据文件**")
+        st.markdown("**Data Files**")
         st.text(debug_info.get("parquet_paths", []))
 
 
 def render_field_explanations(field_explanations: Dict[str, str]) -> None:
-    """渲染字段解释（复杂分析时使用）"""
+    """Render field explanations."""
     if not field_explanations:
         return
 
-    with st.expander("📖 字段说明", expanded=True):
+    with st.expander("Field Notes", expanded=True):
         for field, explanation in field_explanations.items():
             st.markdown(f"**{field}**：{explanation}")
 
@@ -172,70 +233,65 @@ def render_field_explanations(field_explanations: Dict[str, str]) -> None:
 # ============================================================================
 
 with st.sidebar:
-    st.title("配置")
+    st.title("Settings")
 
-    # API 状态检查
-    if st.button("检查 API 状态"):
+    if st.button("Check API Status"):
         if check_api_health():
-            st.success("API 服务正常")
+            st.success("API service is healthy")
         else:
-            st.error("API 服务不可用")
+            st.error("API service is unavailable")
 
     st.markdown("---")
 
-    # Debug 模式开关
     st.session_state.debug_mode = st.checkbox(
-        "Debug 模式",
+        "Debug Mode",
         value=st.session_state.debug_mode,
-        help="展示 QueryPlan、SQL 等调试信息",
+        help="Show QueryPlan, SQL, and data file paths",
     )
 
-    # 默认配置
-    st.markdown("### 默认配置")
+    st.markdown("### Defaults")
 
     default_date = st.date_input(
-        "默认交易日",
+        "Default Trading Date",
         value=datetime.now() - timedelta(days=1),
-        help="如果用户没有指定日期，使用此默认值",
+        help="Used when your question does not specify an exact date",
     )
 
     default_market = st.selectbox(
-        "默认市场",
-        options=["ALL", "XSHG", "XSHE", "US"],
+        "Default Market",
+        options=["ALL", "HK", "US"],
         index=0,
-        help="XSHG=上交所, XSHE=深交所, US=美股, ALL=A股全部",
+        help="HK = Hong Kong stocks, US = US stocks, ALL = HK + US",
     )
 
     st.markdown("---")
 
-    # 清空对话按钮
-    if st.button("清空对话"):
+    if st.button("Clear Chat"):
         st.session_state.session_id = None
         st.session_state.messages = []
         st.rerun()
 
-    # 帮助信息
     st.markdown("---")
-    st.markdown("### 帮助")
+    st.markdown("### Help")
     st.markdown("""
-    **启动后端服务:**
+    **Start the backend:**
     ```bash
     python -m uvicorn app.api:app --port 8080
     ```
 
-    **支持的查询类型:**
-    - 涨幅/跌幅排名
-    - 成交额/量筛选
-    - 涨跌停统计
-    - 振幅分析
+    **Supported question types:**
+    - Top gainers / losers
+    - Turnover and volume rankings
+    - Filter queries
+    - Historical price trends
     """)
 
 # ============================================================================
 # 主界面 - 对话式布局
 # ============================================================================
 
-st.title("智能行情分析助手")
-st.caption("基于Qwen3-32B + DuckDB 的股票行情分析系统")
+st.title("Market Assistant")
+st.caption("GPT-5.5 + DuckDB stock market analysis for HK and US daily data")
 
 st.markdown("---")
 
@@ -249,29 +305,25 @@ for msg in st.session_state.messages:
             st.markdown(msg["content"])
     else:
         with st.chat_message("assistant"):
-            # 查询结果（表格）
             if msg.get("table"):
-                st.markdown("**查询结果**")
+                render_result_chart(msg["table"])
+                st.markdown("**Results**")
                 df = format_table(msg["table"])
                 if df is not None:
                     st.dataframe(df, use_container_width=True)
                 else:
-                    st.info("无数据")
+                    st.info("No data")
 
-            # 字段解释（复杂分析时显示）
             if msg.get("field_explanations"):
                 render_field_explanations(msg["field_explanations"])
 
-            # 查询结果分析（LLM 生成的内容）
             if msg.get("analysis"):
-                st.markdown("**查询结果分析**")
+                st.markdown("**Analysis**")
                 st.markdown(msg["analysis"])
 
-            # 错误信息
             if msg.get("error"):
                 st.error(msg["error"])
 
-            # Debug 信息
             if st.session_state.debug_mode and msg.get("debug"):
                 render_debug_info(msg["debug"])
 
@@ -280,15 +332,15 @@ for msg in st.session_state.messages:
 # ============================================================================
 
 if not st.session_state.messages:
-    st.markdown("### 试试这些问题")
+    st.markdown("### Try These Questions")
 
     col1, col2 = st.columns(2)
 
     example_queries = [
-        "今天涨幅前10的股票",
-        "成交额最高的5只股票",
-        "今天涨停的股票有哪些",
-        "统计今天上涨和下跌的股票数量",
+        "Which HK stocks had the highest turnover today?",
+        "Show the 10 biggest US stock decliners today",
+        "Which stocks have turnover rate above 5% today?",
+        "Show Tesla's price trend in January 2025",
     ]
 
     with col1:
@@ -315,14 +367,16 @@ if "pending_query" in st.session_state:
     query = st.session_state.pending_query
     del st.session_state.pending_query
 
-    # 添加用户消息
     st.session_state.messages.append({"role": "user", "content": query})
 
-    # 调用 API
-    with st.spinner("正在分析..."):
-        response = call_chat_api(query, debug=st.session_state.debug_mode)
+    with st.spinner("Analyzing..."):
+        response = call_chat_api(
+            query,
+            debug=st.session_state.debug_mode,
+            default_date=default_date,
+            default_market=default_market,
+        )
 
-    # 添加助手消息
     if response:
         assistant_msg = {"role": "assistant"}
         if response.get("error"):
@@ -337,21 +391,23 @@ if "pending_query" in st.session_state:
     st.rerun()
 
 # ============================================================================
-# 输入框
+# Chat input
 # ============================================================================
 
-if prompt := st.chat_input("请输入您的问题，例如：今天涨幅前10的股票有哪些？"):
-    # 添加用户消息到历史
+if prompt := st.chat_input("Ask a market question, e.g. Which US stocks fell the most today?"):
     st.session_state.messages.append({"role": "user", "content": prompt})
 
-    # 显示用户消息
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # 调用 API 并显示响应
     with st.chat_message("assistant"):
-        with st.spinner("正在分析..."):
-            response = call_chat_api(prompt, debug=st.session_state.debug_mode)
+        with st.spinner("Analyzing..."):
+            response = call_chat_api(
+                prompt,
+                debug=st.session_state.debug_mode,
+                default_date=default_date,
+                default_market=default_market,
+            )
 
         if response:
             assistant_msg = {"role": "assistant"}
@@ -360,29 +416,25 @@ if prompt := st.chat_input("请输入您的问题，例如：今天涨幅前10�
                 st.error(response["error"])
                 assistant_msg["error"] = response["error"]
             else:
-                # 查询结果
                 if response.get("table"):
-                    st.markdown("**查询结果**")
+                    render_result_chart(response["table"])
+                    st.markdown("**Results**")
                     df = format_table(response["table"])
                     if df is not None:
                         st.dataframe(df, use_container_width=True)
                     assistant_msg["table"] = response["table"]
 
-                # 字段解释（复杂分析时显示）
                 if response.get("field_explanations"):
                     render_field_explanations(response["field_explanations"])
                     assistant_msg["field_explanations"] = response["field_explanations"]
 
-                # 查询结果分析
                 if response.get("commentary"):
-                    st.markdown("**查询结果分析**")
+                    st.markdown("**Analysis**")
                     st.markdown(response["commentary"])
                     assistant_msg["analysis"] = response["commentary"]
 
-                # Debug 信息
                 if st.session_state.debug_mode and response.get("debug"):
                     render_debug_info(response["debug"])
                     assistant_msg["debug"] = response["debug"]
 
-            # 保存助手消息到历史
             st.session_state.messages.append(assistant_msg)

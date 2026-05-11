@@ -36,7 +36,7 @@ class TestPlanValidation:
         """测试有效的 QueryPlan"""
         plan = {
             "date": "20250115",
-            "market": "XSHG",
+            "market": "HK",
             "metrics": ["涨幅"],
             "filters": [
                 {"field": "TotalValueTrade", "op": ">", "value": 1000000}
@@ -55,14 +55,14 @@ class TestPlanValidation:
         """测试无效的日期格式"""
         plan = {
             "date": "2025-01-15",  # 错误格式（应为 YYYYMMDD）
-            "market": "XSHG",
+            "market": "HK",
             "limit": 10,
             "select_fields": ["SecurityID"],
         }
 
         errors = self.planner._validate_plan(plan)
         assert len(errors) > 0, "Expected validation error for invalid date"
-        assert any("日期格式" in e for e in errors)
+        assert any("date format" in e for e in errors)
 
     def test_invalid_market(self):
         """测试无效的市场代码"""
@@ -75,13 +75,13 @@ class TestPlanValidation:
 
         errors = self.planner._validate_plan(plan)
         assert len(errors) > 0, "Expected validation error for invalid market"
-        assert any("市场代码" in e for e in errors)
+        assert any("market code" in e for e in errors)
 
     def test_invalid_limit_too_small(self):
         """测试 Limit 太小"""
         plan = {
             "date": "20250115",
-            "market": "XSHG",
+            "market": "HK",
             "limit": 0,  # 太小
             "select_fields": ["SecurityID"],
         }
@@ -94,7 +94,7 @@ class TestPlanValidation:
         """测试 Limit 太大"""
         plan = {
             "date": "20250115",
-            "market": "XSHG",
+            "market": "HK",
             "limit": 100001,  # 太大（>10000）
             "select_fields": ["SecurityID"],
         }
@@ -107,7 +107,7 @@ class TestPlanValidation:
         """测试无效的操作符"""
         plan = {
             "date": "20250115",
-            "market": "XSHG",
+            "market": "HK",
             "limit": 10,
             "select_fields": ["SecurityID"],
             "filters": [
@@ -117,26 +117,26 @@ class TestPlanValidation:
 
         errors = self.planner._validate_plan(plan)
         assert len(errors) > 0, "Expected validation error for invalid operator"
-        assert any("操作符" in e for e in errors)
+        assert any("Operator" in e for e in errors)
 
     def test_invalid_field_in_select(self):
         """测试 select_fields 中的无效字段"""
         plan = {
             "date": "20250115",
-            "market": "XSHG",
+            "market": "HK",
             "limit": 10,
             "select_fields": ["SecurityID", "InvalidField"],  # 无效字段
         }
 
         errors = self.planner._validate_plan(plan)
         assert len(errors) > 0, "Expected validation error for invalid field"
-        assert any("白名单" in e for e in errors)
+        assert any("allowed" in e for e in errors)
 
     def test_invalid_metric(self):
         """测试无效的衍生指标"""
         plan = {
             "date": "20250115",
-            "market": "XSHG",
+            "market": "HK",
             "limit": 10,
             "select_fields": ["SecurityID"],
             "metrics": ["涨幅", "不存在的指标"],  # 无效指标
@@ -144,11 +144,11 @@ class TestPlanValidation:
 
         errors = self.planner._validate_plan(plan)
         assert len(errors) > 0, "Expected validation error for invalid metric"
-        assert any("白名单" in e for e in errors)
+        assert any("allowed" in e for e in errors)
 
     def test_valid_markets(self):
         """测试所有有效的市场代码"""
-        valid_markets = ["XSHG", "XSHE", "US", "ALL"]
+        valid_markets = ["HK", "US", "ALL"]
 
         for market in valid_markets:
             plan = {
@@ -183,7 +183,7 @@ class TestFieldWhitelist:
         """测试基础字段在白名单中"""
         required_fields = [
             "SecurityID", "ClosePx", "PreClosePx", "HighPx", "LowPx",
-            "TotalValueTrade", "TotalVolumeTrade", "MaxPx", "MinPx"
+            "TotalValueTrade", "TotalVolumeTrade", "ChangePct", "Amplitude", "TurnoverRate"
         ]
 
         for field in required_fields:
@@ -191,7 +191,7 @@ class TestFieldWhitelist:
 
     def test_derived_metrics_in_whitelist(self):
         """测试衍生指标在白名单中"""
-        required_metrics = ["涨幅", "跌幅", "振幅", "是否涨停", "是否跌停"]
+        required_metrics = ["涨幅", "跌幅", "振幅", "换手率"]
 
         for metric in required_metrics:
             assert metric in DERIVED_METRICS, f"Metric {metric} should be in DERIVED_METRICS"

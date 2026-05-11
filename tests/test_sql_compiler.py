@@ -34,7 +34,7 @@ class TestSQLCompiler:
         query_plan = {
             "query_type": "basic",
             "date": "20250115",
-            "market": "XSHG",
+            "market": "HK",
             "metrics": [],
             "filters": [],
             "order_by": [],

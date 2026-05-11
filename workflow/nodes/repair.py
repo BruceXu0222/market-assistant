@@ -30,22 +30,22 @@ import json
 # ============================================================================
 
 REPAIR_SYSTEM_PROMPT = """
-你是一个 QueryPlan 修复器。你的任务是根据校验错误修复 QueryPlan。
+You are a QueryPlan repair assistant. Fix the QueryPlan according to validation errors.
 
-**修复规则：**
-1. 只修复错误中提到的问题，不要改变其他部分
-2. 必须遵守字段白名单和业务规则
-3. 输出格式必须是有效 JSON
-4. 只输出修复后的 QueryPlan，不要有其他文字
+Repair rules:
+1. Only fix the issues mentioned in the errors.
+2. Follow the allowed fields and business rules.
+3. Output valid JSON.
+4. Output the repaired QueryPlan only, with no extra prose.
 
-**可用字段白名单：**
-- SecurityID, LastPx, PreClosePx, OpenPx, HighPx, LowPx
-- TotalValueTrade, TotalVolumeTrade
-- BidPrice1~5, OfferPrice1~5, BidVolume1~5, OfferVolume1~5
-- 涨幅, 振幅, 盘口差
+Allowed fields:
+- Market, MDDate, SecurityID, Symbol, HTSCSecurityID
+- OpenPx, ClosePx, HighPx, LowPx, PreClosePx, LastPx
+- TotalValueTrade, TotalVolumeTrade, ChangePx, ChangePct, Amplitude, TurnoverRate
+- 涨幅, 跌幅, 振幅, 换手率
 
-**市场代码白名单：** XSHG, XSHE, US, ALL
-**操作符白名单：** >, <, =, >=, <=, !=
+Allowed markets: HK, US, ALL
+Allowed operators: >, <, =, >=, <=, !=
 """
 
 
@@ -81,13 +81,13 @@ def repair_node(state: Dict[str, Any]) -> Dict[str, Any]:
     prompt = f"""
 {REPAIR_SYSTEM_PROMPT}
 
-**原始 QueryPlan：**
+Original QueryPlan:
 {json.dumps(query_plan, ensure_ascii=False, indent=2)}
 
-**校验错误：**
+Validation errors:
 {chr(10).join(f"- {error}" for error in validation_errors)}
 
-**请输出修复后的 QueryPlan（纯 JSON）：**
+Return the repaired QueryPlan as JSON only:
 """
 
     # ========================================================================

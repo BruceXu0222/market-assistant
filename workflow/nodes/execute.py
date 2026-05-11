@@ -18,9 +18,9 @@ Execute 节点：SQL 执行
 from typing import Dict, Any
 import time
 
-# TODO: from core.sql_compiler import compile_query_plan
-# TODO: from core.duckdb_engine import DuckDBEngine
-# TODO: from core.path_resolver import resolve_parquet_paths
+from core.sql_compiler import SQLCompilerEnhanced
+from core.duckdb_engine import DuckDBEngine
+from core.path_resolver import resolve_parquet_paths
 
 # ============================================================================
 # 执行函数
@@ -56,55 +56,36 @@ def execute_node(state: Dict[str, Any]) -> Dict[str, Any]:
     # 1. 解析 Parquet 文件路径
     # ========================================================================
 
-    # TODO: 实现路径解析
-    # date = query_plan["date"]
-    # market = query_plan["market"]
-    # paths = resolve_parquet_paths(date, market)
-    #
-    # if not paths:
-    #     state["error"] = f"未找到数据文件: date={date}, market={market}"
-    #     return state
-
-    # 占位
-    paths = []
+    try:
+        date = query_plan.get("date")
+        market = query_plan.get("market", "ALL")
+        paths = resolve_parquet_paths(date, market)
+    except Exception as e:
+        state["error"] = f"未找到数据文件: date={query_plan.get('date')}, market={query_plan.get('market')}: {e}"
+        return state
 
     # ========================================================================
     # 2. 编译 QueryPlan 为 SQL
     # ========================================================================
 
-    # TODO: 实现 SQL 编译
-    # sql = compile_query_plan(query_plan, paths)
-    # state["sql"] = sql
-
-    # 占位
-    sql = """
-    SELECT
-        SecurityID,
-        LastPx,
-        PreClosePx,
-        (LastPx - PreClosePx) / PreClosePx * 100 AS 涨幅
-    FROM parquet_scan('data/*.parquet')
-    WHERE TotalValueTrade > 0
-    ORDER BY 涨幅 DESC
-    LIMIT 10
-    """
-    state["sql"] = sql
+    try:
+        compiler = SQLCompilerEnhanced()
+        sql = compiler.compile(query_plan, paths)
+        state["sql"] = sql
+    except Exception as e:
+        state["error"] = f"SQL 编译失败: {e}"
+        return state
 
     # ========================================================================
     # 3. 执行 DuckDB 查询
     # ========================================================================
 
-    # TODO: 实现 DuckDB 查询
-    # engine = DuckDBEngine()
-    # try:
-    #     df = engine.execute(sql)
-    #     state["dataframe"] = df
-    # except Exception as e:
-    #     state["error"] = f"DuckDB 查询失败: {e}"
-    #     return state
-
-    # 占位：模拟 DataFrame
-    state["dataframe"] = None  # pandas.DataFrame
+    with DuckDBEngine() as engine:
+        try:
+            state["dataframe"] = engine.execute(sql)
+        except Exception as e:
+            state["error"] = f"DuckDB 查询失败: {e}"
+            return state
 
     # ========================================================================
     # 4. 记录延迟

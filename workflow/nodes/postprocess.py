@@ -54,54 +54,32 @@ def postprocess_node(state: Dict[str, Any]) -> Dict[str, Any]:
     # 1. 格式化数值
     # ========================================================================
 
-    # TODO: 实现格式化逻辑
-    # df_formatted = dataframe.copy()
-    #
-    # # 保留 2 位小数
-    # numeric_cols = df_formatted.select_dtypes(include=['float64', 'float32']).columns
-    # df_formatted[numeric_cols] = df_formatted[numeric_cols].round(2)
-    #
-    # # 处理 NaN
-    # df_formatted = df_formatted.fillna("-")
-
-    # 占位
-    df_formatted = dataframe
+    df_formatted = dataframe.copy()
+    numeric_cols = df_formatted.select_dtypes(include=["float64", "float32"]).columns
+    df_formatted[numeric_cols] = df_formatted[numeric_cols].round(4)
+    df_formatted = df_formatted.where(pd.notna(df_formatted), None)
 
     # ========================================================================
     # 2. 转换为 List[Dict]
     # ========================================================================
 
-    # TODO: 实现转换
-    # table = df_formatted.to_dict(orient="records")
-    # state["table"] = table
-
-    # 占位
-    state["table"] = []
+    state["table"] = df_formatted.to_dict(orient="records")
 
     # ========================================================================
     # 3. 计算统计摘要
     # ========================================================================
 
-    # TODO: 实现统计摘要
-    # summary = {"总记录数": len(dataframe)}
-    #
-    # # 对数值列计算统计量
-    # query_plan = state.get("query_plan", {})
-    # metrics = query_plan.get("metrics", [])
-    #
-    # for metric in metrics:
-    #     if metric in dataframe.columns:
-    #         col = dataframe[metric]
-    #         if pd.api.types.is_numeric_dtype(col):
-    #             summary[f"{metric}最大"] = round(col.max(), 2)
-    #             summary[f"{metric}最小"] = round(col.min(), 2)
-    #             summary[f"{metric}均值"] = round(col.mean(), 2)
-    #             summary[f"{metric}中位数"] = round(col.median(), 2)
-    #
-    # state["summary"] = summary
+    summary = {"总记录数": len(dataframe), "列数": len(dataframe.columns), "列名": list(dataframe.columns)}
+    query_plan = state.get("query_plan", {})
 
-    # 占位
-    state["summary"] = {"总记录数": 0}
+    for metric in query_plan.get("metrics", []):
+        if metric in dataframe.columns and pd.api.types.is_numeric_dtype(dataframe[metric]):
+            col = dataframe[metric]
+            summary[f"{metric}最大"] = round(col.max(), 4)
+            summary[f"{metric}最小"] = round(col.min(), 4)
+            summary[f"{metric}均值"] = round(col.mean(), 4)
+
+    state["summary"] = summary
 
     # ========================================================================
     # 日志记录

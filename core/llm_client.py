@@ -64,7 +64,7 @@ class LLMClient:
         client = LLMClient(
             base_url="https://api.openai.com/v1",
             api_key="sk-xxx",
-            model="gpt-5.2"
+            model="gpt-5.5"
         )
     """
 
@@ -109,7 +109,7 @@ class LLMClient:
             model
             or os.getenv("OPENAI_MODEL")
             or llm_config.get("model")
-            or "gpt-4"
+            or "gpt-5.5"
         )
 
         # 从配置文件读取默认参数

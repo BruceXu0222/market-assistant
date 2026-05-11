@@ -19,33 +19,35 @@ SQL 编译器（增强版）
 6. 快照去重：使用 ROW_NUMBER() OVER (PARTITION BY SecurityID ORDER BY MDTime DESC) 选择最新快照
 """
 
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple, Dict, Any, Set
 
 # ============================================================================
 # 衍生指标定义（增强版）
 # ============================================================================
 
 METRIC_DEFINITIONS = {
-    # 涨跌幅相关（使用 ClosePx 收盘价计算）
-    "涨幅": "(ClosePx - PreClosePx) / NULLIF(PreClosePx, 0) * 100",
-    "跌幅": "(PreClosePx - ClosePx) / NULLIF(PreClosePx, 0) * 100",
-    "振幅": "(HighPx - LowPx) / NULLIF(PreClosePx, 0) * 100",
-
-    # 涨跌停判断（使用数据中已有的 MaxPx 和 MinPx）
-    "是否涨停": "CASE WHEN ClosePx >= MaxPx THEN 1 ELSE 0 END",
-    "是否跌停": "CASE WHEN ClosePx <= MinPx THEN 1 ELSE 0 END",
-
-    # 买卖盘比（使用 TotalBidQty 和 TotalOfferQty）
-    "买卖盘比": "TotalBidQty / NULLIF(TotalOfferQty, 0)",
+    # 日线行情数据中已包含涨跌幅/振幅。对旧快照数据，ChangePct/Amplitude 会在源层兜底计算。
+    "涨幅": "ChangePct",
+    "跌幅": "-ChangePct",
+    "振幅": "Amplitude",
+    "换手率": "TurnoverRate",
 
     # 价格区间（使用 ClosePx）
     "价格区间": "CASE WHEN ClosePx < 10 THEN '<10元' WHEN ClosePx <= 30 THEN '10-30元' ELSE '>30元' END",
 }
 
+METRIC_DEPENDENCIES = {
+    "涨幅": {"ChangePct"},
+    "跌幅": {"ChangePct"},
+    "振幅": {"Amplitude"},
+    "换手率": {"TurnoverRate"},
+    "价格区间": {"ClosePx"},
+}
+
 # 有效的基础字段白名单（与实际数据表结构匹配）
 VALID_BASE_FIELDS = {
     # 基础信息
-    "MDDate", "MDTime", "SecurityType", "SecuritySubType",
+    "Market", "MDDate", "MDTime", "SecurityType", "SecuritySubType",
     "SecurityID", "SecurityIDSource", "Symbol", "TradingPhaseCode",
     "HTSCSecurityID", "ReceiveDateTime", "ChannelNo",
     # 价格字段
@@ -53,6 +55,7 @@ VALID_BASE_FIELDS = {
     "DiffPx1", "DiffPx2", "MaxPx", "MinPx",
     # 成交字段
     "NumTrades", "TotalVolumeTrade", "TotalValueTrade",
+    "ChangePx", "ChangePct", "Amplitude", "TurnoverRate",
     # 买卖盘汇总
     "TotalBidQty", "TotalOfferQty", "WeightedAvgBidPx", "WeightedAvgOfferPx",
     # 盘后交易
@@ -125,10 +128,14 @@ class SQLCompilerEnhanced:
             raise ValueError("parquet_paths 不能为空")
 
         query_type = query_plan.get("query_type", "basic")
+        self._normalize_plan_metrics(query_plan)
 
         # raw_data 查询不去重，保留所有快照
         # 如果 filters 中包含时间条件（Time/MDTime），也不去重
         use_latest_snapshot = query_type != "raw_data"
+        if self._is_daily_history_source(parquet_paths):
+            # HK/US 日线数据每只股票每天最多一条记录，日期过滤应直接作用于历史表。
+            use_latest_snapshot = False
         if use_latest_snapshot:
             filters = query_plan.get("filters", [])
             for f in filters:
@@ -154,10 +161,6 @@ class SQLCompilerEnhanced:
             # 统计分析/聚合查询：带 GROUP BY 和聚合函数
             sql = self._compile_aggregation_query(query_plan, from_clause)
 
-        elif query_type == "complex_analysis":
-            # 第三类：复杂分析查询（跨时序、多指标组合）
-            sql = self._compile_complex_analysis(query_plan, parquet_paths)
-
         else:
             raise ValueError(f"不支持的 query_type: {query_type}")
 
@@ -180,7 +183,7 @@ class SQLCompilerEnhanced:
 
         # 1. 确定需要的字段
         output_fields = query_plan.get("select_fields") or query_plan.get("output_fields", [])
-        filters = query_plan.get("filters", [])
+        filters = self._expand_plan_filters(query_plan)
         time_range = query_plan.get("time_range", {})
         order_by = query_plan.get("order_by", [])
 
@@ -233,7 +236,7 @@ class SQLCompilerEnhanced:
                 field_expr = field
 
             if isinstance(value, str):
-                all_conditions.append(f"{field_expr} {op} '{value}'")
+                all_conditions.append(f"{field_expr} {op} {self._quote_sql_string(value)}")
             else:
                 all_conditions.append(f"{field_expr} {op} {value}")
 
@@ -283,7 +286,7 @@ class SQLCompilerEnhanced:
         # 1. 确定需要的字段（支持新旧两种字段名）
         output_fields = query_plan.get("select_fields") or query_plan.get("output_fields", [])
         metrics = query_plan.get("metrics", [])
-        filters = query_plan.get("filters", [])
+        filters = self._expand_plan_filters(query_plan)
         order_by = query_plan.get("order_by", [])
 
         # 收集基础字段（过滤掉无效字段）
@@ -307,13 +310,7 @@ class SQLCompilerEnhanced:
         # 添加 metrics 需要的基础字段（简化：添加所有可能字段）
         for metric in metrics:
             if metric in METRIC_DEFINITIONS:
-                required_base_fields.update([
-                    "ClosePx", "PreClosePx", "HighPx", "LowPx", "MaxPx", "MinPx",
-                    "TotalVolumeTrade", "TotalValueTrade",
-                    "Sell1Price", "Buy1Price",
-                    "Buy1OrderQty", "Buy2OrderQty", "Buy3OrderQty", "Buy4OrderQty", "Buy5OrderQty",
-                    "Sell1OrderQty", "Sell2OrderQty", "Sell3OrderQty", "Sell4OrderQty", "Sell5OrderQty",
-                ])
+                required_base_fields.update(METRIC_DEPENDENCIES.get(metric, set()))
 
         # 2. 构建 SELECT 子句
         select_items = []
@@ -370,7 +367,7 @@ class SQLCompilerEnhanced:
         # 1. 解析参数（支持新旧两种字段名）
         output_fields = query_plan.get("select_fields") or query_plan.get("output_fields", [])
         metrics = query_plan.get("metrics", [])
-        filters = query_plan.get("filters", [])
+        filters = self._expand_plan_filters(query_plan)
         aggregations = query_plan.get("aggregations", [])
         group_by = query_plan.get("group_by", [])
         having = query_plan.get("having", [])
@@ -454,393 +451,192 @@ class SQLCompilerEnhanced:
 
         return "\n".join(sql_parts)
 
-    def _compile_complex_analysis(self, query_plan: Dict[str, Any], parquet_paths: List[str]) -> str:
-        """
-        编译第三类复杂分析查询
+    def _normalize_plan_metrics(self, query_plan: Dict[str, Any]) -> None:
+        """把 select/order/filter 中出现的衍生指标补进 metrics，避免 LLM 漏填。"""
+        metrics = list(query_plan.get("metrics", []))
+        seen = set(metrics)
 
-        支持的分析类型：
-        - order_book_anomaly: 盘口异动分析
-        - money_flow: 资金流向分析
-        - pressure_analysis: 买卖压力分析
-        """
-        analysis_type = query_plan.get("analysis_type", "order_book_anomaly")
-        print(f"[SQL编译器] 使用复杂分析编译策略，analysis_type={analysis_type}")
+        candidate_fields = []
+        candidate_fields.extend(query_plan.get("select_fields", []))
+        candidate_fields.extend(query_plan.get("output_fields", []))
+        candidate_fields.extend(item.get("field") for item in query_plan.get("order_by", []))
+        candidate_fields.extend(item.get("field") for item in query_plan.get("filters", []))
 
-        if analysis_type == "order_book_anomaly":
-            return self._compile_order_book_anomaly(query_plan, parquet_paths)
-        elif analysis_type == "money_flow":
-            return self._compile_money_flow(query_plan, parquet_paths)
-        elif analysis_type == "pressure_analysis":
-            return self._compile_pressure_analysis(query_plan, parquet_paths)
-        else:
-            raise ValueError(f"不支持的 analysis_type: {analysis_type}")
+        for field in candidate_fields:
+            if field in METRIC_DEFINITIONS and field not in seen:
+                metrics.append(field)
+                seen.add(field)
 
-    def get_field_explanations(self, analysis_type: str) -> Dict[str, str]:
-        """
-        获取复杂分析的字段解释
+        query_plan["metrics"] = metrics
 
-        Args:
-            analysis_type: 分析类型
+    def _expand_plan_filters(self, query_plan: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """添加日期过滤。新 HK/US 数据按股票文件存放，必须在 SQL 中过滤日期。"""
+        filters = list(query_plan.get("filters", []))
 
-        Returns:
-            字段名 -> 解释 的字典
-        """
-        explanations = {
-            "order_book_anomaly": {
-                "股票代码": "股票的唯一标识代码（如 300190）",
-                "股票名称": "股票的中文简称",
-                "数据点数": "该股票在分析时段内的快照数量，数据点越多统计越可靠",
-                "委比波动率": "委买委卖比的标准差。委比 = (买盘总量-卖盘总量)/(买盘总量+卖盘总量)，波动率越大说明买卖力量变化越剧烈",
-                "买一变化率_max": "买一档挂单量相邻时间点的最大变化率。数值越大说明买一档出现过大幅撤单或加单",
-                "卖一变化率_max": "卖一档挂单量相邻时间点的最大变化率。数值越大说明卖一档出现过大幅撤单或加单",
-                "价差波动率": "买卖价差(Sell1Price-Buy1Price)相对于中间价的波动程度。反映盘口流动性的稳定性",
-                "异动分数": "综合异动评分(0-1)，由委比波动率(30%)、买一变化率(25%)、卖一变化率(25%)、价差波动率(20%)加权计算。分数越高表示盘口异动越大",
-            },
-            "money_flow": {
-                "股票代码": "股票的唯一标识代码",
-                "股票名称": "股票的中文简称",
-                "数据点数": "该股票在分析时段内的快照数量",
-                "主动买入(亿)": "价格上涨时产生的成交金额，推断为主动性买入资金",
-                "主动卖出(亿)": "价格下跌时产生的成交金额，推断为主动性卖出资金",
-                "净流入(亿)": "主动买入 - 主动卖出，正数表示资金净流入",
-                "平均买卖盘比": "分析时段内 买盘总量/卖盘总量 的平均值，>1表示买盘占优",
-                "买卖盘比变化": "买卖盘比的变化趋势（结束值-开始值），正数表示买盘力量增强",
-                "资金状态": "综合判断：强流入(净流入+买盘增强)、流入(仅净流入)、强流出(净流出+买盘减弱)、流出(仅净流出)",
-            },
-            "pressure_analysis": {
-                "股票代码": "股票的唯一标识代码",
-                "股票名称": "股票的中文简称",
-                "时间": "快照时间（格式 HHMMSSmmm，如 093000000 表示 9:30:00.000）",
-                "最新价": "该时刻的最新成交价格",
-                "委买委卖比": "买盘总量/卖盘总量，>1表示买盘力量强，<1表示卖盘力量强",
-                "买盘深度(万)": "前5档买盘挂单总量（单位：万股），反映买方承接力度",
-                "卖盘深度(万)": "前5档卖盘挂单总量（单位：万股），反映卖方抛压",
-                "压力差(万)": "前3档买盘量 - 前3档卖盘量，正数表示买盘强于卖盘",
-                "压力状态": "买压大(买盘>卖盘1.5倍)、卖压大(卖盘>买盘1.5倍)、平衡(其他)",
-            },
-        }
-        return explanations.get(analysis_type, {})
+        has_md_date_filter = any(f.get("field") in {"MDDate", "日期"} for f in filters)
+        date_range = query_plan.get("date_range") or {}
 
-    def _compile_order_book_anomaly(self, query_plan: Dict[str, Any], parquet_paths: List[str]) -> str:
-        """
-        编译盘口异动分析
+        if date_range and not has_md_date_filter:
+            start_date = date_range.get("start")
+            end_date = date_range.get("end")
+            if start_date:
+                filters.append({"field": "MDDate", "op": ">=", "value": self._normalize_date_format(start_date)})
+            if end_date:
+                filters.append({"field": "MDDate", "op": "<=", "value": self._normalize_date_format(end_date)})
+        elif query_plan.get("date") and not has_md_date_filter:
+            filters.append({"field": "MDDate", "op": "=", "value": self._normalize_date_format(query_plan["date"])})
 
-        异动指标：
-        1. 委比波动率：(TotalBidQty - TotalOfferQty) / (TotalBidQty + TotalOfferQty) 的标准差
-        2. 买一变化率：买一档挂单量相邻时间点的最大变化率
-        3. 卖一变化率：卖一档挂单量相邻时间点的最大变化率
-        4. 价差波动率：(Sell1Price - Buy1Price) / 中间价 的标准差
-        5. 综合异动分数：上述指标标准化后加权求和
-        """
-        limit = query_plan.get("limit", 5)
-        filters = query_plan.get("filters", [])
+        return filters
 
-        # 构建数据源（不去重，需要所有时间快照）
-        if len(parquet_paths) == 1:
-            base_source = f"parquet_scan('{parquet_paths[0]}')"
-        else:
-            union_queries = [f"SELECT * FROM parquet_scan('{path}')" for path in parquet_paths]
-            base_source = f"({' UNION ALL '.join(union_queries)})"
+    def _normalize_date_format(self, date_str: str) -> str:
+        """标准化日期为 YYYYMMDD。"""
+        return str(date_str).replace("-", "").replace("/", "")[:8]
 
-        # 构建过滤条件（如指定股票）
-        where_conditions = []
-        for f in filters:
-            field = f["field"]
-            op = f["op"]
-            value = f["value"]
-            if isinstance(value, str):
-                where_conditions.append(f"{field} {op} '{value}'")
+    def _is_daily_history_source(self, parquet_paths: List[str]) -> bool:
+        """判断是否为 data/hk 或 data/us 下的历史日线 parquet。"""
+        for path in parquet_paths:
+            normalized = path.replace("\\", "/").lower()
+            if "/hk/" in normalized or normalized.endswith("/hk/*.parquet"):
+                return True
+            if "/us/" in normalized or normalized.endswith("/us/*.parquet"):
+                return True
+            if normalized.startswith("data/hk/") or normalized.startswith("data/us/"):
+                return True
+        return False
+
+    def _path_market(self, path: str) -> str:
+        normalized = path.replace("\\", "/").lower()
+        if "/hk/" in normalized or normalized.endswith("/hk/*.parquet") or normalized.startswith("data/hk/"):
+            return "HK"
+        if "/us/" in normalized or normalized.endswith("/us/*.parquet") or normalized.startswith("data/us/"):
+            return "US"
+        return "UNKNOWN"
+
+    def _quote_sql_string(self, value: str) -> str:
+        return "'" + str(value).replace("'", "''") + "'"
+
+    def _build_scan_call(self, paths: List[str], union_by_name: bool = False) -> str:
+        options = ", union_by_name=true" if union_by_name else ""
+        if len(paths) == 1:
+            return f"parquet_scan({self._quote_sql_string(paths[0])}{options})"
+        quoted_paths = ", ".join(self._quote_sql_string(path) for path in paths)
+        return f"parquet_scan([{quoted_paths}]{options})"
+
+    def _build_daily_history_base_query(self, parquet_paths: List[str]) -> str:
+        """把 HK/US 日线数据归一化成查询层使用的逻辑字段。"""
+        market_to_paths: Dict[str, List[str]] = {}
+        for path in parquet_paths:
+            market_to_paths.setdefault(self._path_market(path), []).append(path)
+
+        source_queries = []
+        for market, paths in market_to_paths.items():
+            scan = self._build_scan_call(paths, union_by_name=(market == "US"))
+            if market == "US":
+                date_expr = "COALESCE(CAST(\"日期\" AS VARCHAR), CAST(\"date\" AS VARCHAR))"
+                open_expr = "COALESCE(\"开盘\", \"open\")"
+                close_expr = "COALESCE(\"收盘\", \"close\")"
+                high_expr = "COALESCE(\"最高\", \"high\")"
+                low_expr = "COALESCE(\"最低\", \"low\")"
+                volume_expr = "COALESCE(CAST(\"成交量\" AS DOUBLE), CAST(\"volume\" AS DOUBLE))"
+                value_expr = "CAST(\"成交额\" AS DOUBLE)"
+                prev_close_expr = (
+                    f"LAG({close_expr}) OVER (PARTITION BY symbol ORDER BY {date_expr})"
+                )
+                change_px_expr = f"COALESCE(CAST(\"涨跌额\" AS DOUBLE), {close_expr} - {prev_close_expr})"
+                change_pct_expr = (
+                    f"COALESCE(CAST(\"涨跌幅\" AS DOUBLE), "
+                    f"({close_expr} - {prev_close_expr}) / NULLIF({prev_close_expr}, 0) * 100)"
+                )
+                amplitude_expr = (
+                    f"COALESCE(CAST(\"振幅\" AS DOUBLE), "
+                    f"({high_expr} - {low_expr}) / NULLIF({prev_close_expr}, 0) * 100)"
+                )
+                turnover_expr = "CAST(\"换手率\" AS DOUBLE)"
+                pre_close_expr = f"COALESCE({close_expr} - ({change_px_expr}), {prev_close_expr})"
             else:
-                where_conditions.append(f"{field} {op} {value}")
+                date_expr = "CAST(\"日期\" AS VARCHAR)"
+                open_expr = "\"开盘\""
+                close_expr = "\"收盘\""
+                high_expr = "\"最高\""
+                low_expr = "\"最低\""
+                volume_expr = "CAST(\"成交量\" AS DOUBLE)"
+                value_expr = "CAST(\"成交额\" AS DOUBLE)"
+                change_px_expr = "CAST(\"涨跌额\" AS DOUBLE)"
+                change_pct_expr = "CAST(\"涨跌幅\" AS DOUBLE)"
+                amplitude_expr = "CAST(\"振幅\" AS DOUBLE)"
+                turnover_expr = "CAST(\"换手率\" AS DOUBLE)"
+                pre_close_expr = "\"收盘\" - COALESCE(\"涨跌额\", 0)"
 
-        where_clause = f"WHERE {' AND '.join(where_conditions)}" if where_conditions else ""
-
-        sql = f"""
-WITH raw_data AS (
-    SELECT *
-    FROM {base_source}
-    {where_clause}
-),
--- 计算每个时间点的盘口指标
-tick_metrics AS (
-    SELECT
-        SecurityID,
-        Symbol,
-        MDTime,
-        -- 委比 = (买总量 - 卖总量) / (买总量 + 卖总量)
-        CASE WHEN (TotalBidQty + TotalOfferQty) > 0
-             THEN (TotalBidQty - TotalOfferQty) * 1.0 / (TotalBidQty + TotalOfferQty)
-             ELSE 0 END AS 委比,
-        -- 买一量
-        COALESCE(Buy1OrderQty, 0) AS Buy1Qty,
-        -- 卖一量
-        COALESCE(Sell1OrderQty, 0) AS Sell1Qty,
-        -- 买卖价差比（相对于中间价）
-        CASE WHEN (Sell1Price + Buy1Price) > 0
-             THEN (Sell1Price - Buy1Price) * 2.0 / (Sell1Price + Buy1Price)
-             ELSE 0 END AS 价差比,
-        -- 用于计算变化率的前一个值
-        LAG(Buy1OrderQty) OVER (PARTITION BY SecurityID ORDER BY MDTime) AS prev_Buy1Qty,
-        LAG(Sell1OrderQty) OVER (PARTITION BY SecurityID ORDER BY MDTime) AS prev_Sell1Qty
-    FROM raw_data
-    WHERE Buy1Price IS NOT NULL AND Sell1Price IS NOT NULL
-),
--- 计算变化率
-tick_changes AS (
-    SELECT
-        SecurityID,
-        Symbol,
-        MDTime,
-        委比,
-        价差比,
-        -- 买一变化率 = |当前 - 前一个| / 前一个平均
-        CASE WHEN prev_Buy1Qty > 0
-             THEN ABS(Buy1Qty - prev_Buy1Qty) * 1.0 / prev_Buy1Qty
-             ELSE 0 END AS 买一变化率,
-        -- 卖一变化率
-        CASE WHEN prev_Sell1Qty > 0
-             THEN ABS(Sell1Qty - prev_Sell1Qty) * 1.0 / prev_Sell1Qty
-             ELSE 0 END AS 卖一变化率
-    FROM tick_metrics
-),
--- 按股票汇总各项异动指标
-stock_anomaly AS (
-    SELECT
-        SecurityID,
-        ANY_VALUE(Symbol) AS Symbol,
-        COUNT(*) AS 数据点数,
-        -- 委比波动率（标准差）
-        STDDEV_SAMP(委比) AS 委比波动率,
-        -- 买一变化率最大值
-        MAX(买一变化率) AS 买一变化率_max,
-        -- 买一变化率平均值
-        AVG(买一变化率) AS 买一变化率_avg,
-        -- 卖一变化率最大值
-        MAX(卖一变化率) AS 卖一变化率_max,
-        -- 价差波动率
-        STDDEV_SAMP(价差比) AS 价差波动率
-    FROM tick_changes
-    GROUP BY SecurityID
-    HAVING COUNT(*) >= 5  -- 至少5个数据点才有统计意义
-),
--- 标准化各指标（Min-Max归一化）并计算综合分数
-normalized AS (
-    SELECT
-        *,
-        -- 归一化委比波动率
-        (委比波动率 - MIN(委比波动率) OVER ()) /
-            NULLIF(MAX(委比波动率) OVER () - MIN(委比波动率) OVER (), 0) AS 委比波动率_norm,
-        -- 归一化买一变化率
-        (买一变化率_max - MIN(买一变化率_max) OVER ()) /
-            NULLIF(MAX(买一变化率_max) OVER () - MIN(买一变化率_max) OVER (), 0) AS 买一变化率_norm,
-        -- 归一化卖一变化率
-        (卖一变化率_max - MIN(卖一变化率_max) OVER ()) /
-            NULLIF(MAX(卖一变化率_max) OVER () - MIN(卖一变化率_max) OVER (), 0) AS 卖一变化率_norm,
-        -- 归一化价差波动率
-        (价差波动率 - MIN(价差波动率) OVER ()) /
-            NULLIF(MAX(价差波动率) OVER () - MIN(价差波动率) OVER (), 0) AS 价差波动率_norm
-    FROM stock_anomaly
-)
+            source_queries.append(f"""
 SELECT
-    SecurityID AS "股票代码",
-    Symbol AS "股票名称",
-    数据点数,
-    ROUND(委比波动率, 4) AS "委比波动率",
-    ROUND(买一变化率_max, 4) AS "买一变化率_max",
-    ROUND(卖一变化率_max, 4) AS "卖一变化率_max",
-    ROUND(价差波动率, 6) AS "价差波动率",
-    -- 综合异动分数 = 加权求和
-    ROUND(
-        COALESCE(委比波动率_norm, 0) * 0.30 +
-        COALESCE(买一变化率_norm, 0) * 0.25 +
-        COALESCE(卖一变化率_norm, 0) * 0.25 +
-        COALESCE(价差波动率_norm, 0) * 0.20,
-        4
-    ) AS "异动分数"
-FROM normalized
-ORDER BY "异动分数" DESC
-LIMIT {limit}
-"""
-        return sql
+    {self._quote_sql_string(market)} AS Market,
+    CAST(symbol AS VARCHAR) AS SecurityID,
+    CAST(stock_name AS VARCHAR) AS Symbol,
+    REPLACE({date_expr}, '-', '') AS MDDate,
+    '000000000' AS MDTime,
+    CAST(NULL AS INTEGER) AS SecurityType,
+    CAST(NULL AS VARCHAR) AS SecuritySubType,
+    CAST(NULL AS INTEGER) AS SecurityIDSource,
+    CAST(NULL AS VARCHAR) AS TradingPhaseCode,
+    CASE WHEN symbol IS NOT NULL AND {self._quote_sql_string(market)} IN ('HK', 'US')
+         THEN symbol || '.' || {self._quote_sql_string(market)}
+         ELSE CAST(symbol AS VARCHAR)
+    END AS HTSCSecurityID,
+    CAST(NULL AS BIGINT) AS ReceiveDateTime,
+    CAST(NULL AS INTEGER) AS ChannelNo,
+    CAST({open_expr} AS DOUBLE) AS OpenPx,
+    CAST({close_expr} AS DOUBLE) AS ClosePx,
+    CAST({close_expr} AS DOUBLE) AS LastPx,
+    CAST({high_expr} AS DOUBLE) AS HighPx,
+    CAST({low_expr} AS DOUBLE) AS LowPx,
+    CAST({change_px_expr} AS DOUBLE) AS ChangePx,
+    CAST({change_pct_expr} AS DOUBLE) AS ChangePct,
+    CAST({pre_close_expr} AS DOUBLE) AS PreClosePx,
+    CAST({volume_expr} AS DOUBLE) AS TotalVolumeTrade,
+    CAST({value_expr} AS DOUBLE) AS TotalValueTrade,
+    CAST({amplitude_expr} AS DOUBLE) AS Amplitude,
+    CAST({turnover_expr} AS DOUBLE) AS TurnoverRate,
+    CAST(NULL AS BIGINT) AS NumTrades,
+    CAST(NULL AS DOUBLE) AS DiffPx1,
+    CAST(NULL AS DOUBLE) AS DiffPx2,
+    CAST(NULL AS DOUBLE) AS MaxPx,
+    CAST(NULL AS DOUBLE) AS MinPx,
+    CAST(NULL AS DOUBLE) AS TotalBidQty,
+    CAST(NULL AS DOUBLE) AS TotalOfferQty,
+    CAST(NULL AS DOUBLE) AS WeightedAvgBidPx,
+    CAST(NULL AS DOUBLE) AS WeightedAvgOfferPx,
+    CAST(NULL AS DOUBLE) AS AfterHoursNumTrades,
+    CAST(NULL AS DOUBLE) AS AfterHoursTotalVolumeTrade,
+    CAST(NULL AS DOUBLE) AS AfterHoursTotalValueTrade,
+    CAST(NULL AS DOUBLE) AS Buy1Price,
+    CAST(NULL AS DOUBLE) AS Buy1OrderQty,
+    CAST(NULL AS DOUBLE) AS Buy1NumOrders,
+    CAST(NULL AS DOUBLE) AS Buy1NoOrders,
+    CAST(NULL AS DOUBLE) AS Sell1Price,
+    CAST(NULL AS DOUBLE) AS Sell1OrderQty,
+    CAST(NULL AS DOUBLE) AS Sell1NumOrders,
+    CAST(NULL AS DOUBLE) AS Sell1NoOrders
+FROM {scan}
+""")
 
-    def _compile_money_flow(self, query_plan: Dict[str, Any], parquet_paths: List[str]) -> str:
-        """
-        编译资金流向分析
+        return " UNION ALL ".join(source_queries)
 
-        资金流向指标：
-        1. 主动买入比例：价格上涨时的成交量占比
-        2. 大单净流入：大额成交的买卖差额
-        3. 买盘压力：买盘总量 / 卖盘总量 的变化
-        """
-        limit = query_plan.get("limit", 10)
-        filters = query_plan.get("filters", [])
-
-        if len(parquet_paths) == 1:
-            base_source = f"parquet_scan('{parquet_paths[0]}')"
-        else:
-            union_queries = [f"SELECT * FROM parquet_scan('{path}')" for path in parquet_paths]
-            base_source = f"({' UNION ALL '.join(union_queries)})"
-
-        where_conditions = []
-        for f in filters:
-            field = f["field"]
-            op = f["op"]
-            value = f["value"]
-            if isinstance(value, str):
-                where_conditions.append(f"{field} {op} '{value}'")
-            else:
-                where_conditions.append(f"{field} {op} {value}")
-
-        where_clause = f"WHERE {' AND '.join(where_conditions)}" if where_conditions else ""
-
-        # 如果指定了特定股票（有 filters），则显示该股票的资金流向（无论流入流出）
-        # 如果没有指定股票，则只显示净流入的股票
-        if where_conditions:
-            final_where = ""  # 单只股票查询，不过滤
-        else:
-            final_where = "WHERE (主动买入额 - 主动卖出额) > 0  -- 只显示净流入的股票"
-
-        sql = f"""
-WITH raw_data AS (
-    SELECT *
-    FROM {base_source}
-    {where_clause}
-),
-tick_data AS (
-    SELECT
-        SecurityID,
-        Symbol,
-        MDTime,
-        LastPx,
-        TotalValueTrade,
-        TotalBidQty,
-        TotalOfferQty,
-        -- 价格变化方向
-        CASE WHEN LastPx > LAG(LastPx) OVER (PARTITION BY SecurityID ORDER BY MDTime) THEN 1
-             WHEN LastPx < LAG(LastPx) OVER (PARTITION BY SecurityID ORDER BY MDTime) THEN -1
-             ELSE 0 END AS 价格方向,
-        -- 成交额增量
-        TotalValueTrade - LAG(TotalValueTrade) OVER (PARTITION BY SecurityID ORDER BY MDTime) AS 成交额增量,
-        -- 买卖盘比
-        CASE WHEN TotalOfferQty > 0 THEN TotalBidQty * 1.0 / TotalOfferQty ELSE 1 END AS 买卖盘比
-    FROM raw_data
-    WHERE LastPx IS NOT NULL AND LastPx > 0
-),
-stock_flow AS (
-    SELECT
-        SecurityID,
-        ANY_VALUE(Symbol) AS Symbol,
-        COUNT(*) AS 数据点数,
-        -- 主动买入金额（价格上涨时的成交额增量）
-        SUM(CASE WHEN 价格方向 > 0 AND 成交额增量 > 0 THEN 成交额增量 ELSE 0 END) AS 主动买入额,
-        -- 主动卖出金额
-        SUM(CASE WHEN 价格方向 < 0 AND 成交额增量 > 0 THEN 成交额增量 ELSE 0 END) AS 主动卖出额,
-        -- 平均买卖盘比
-        AVG(买卖盘比) AS 平均买卖盘比,
-        -- 买卖盘比的变化趋势（最后值 - 最初值）
-        LAST(买卖盘比) - FIRST(买卖盘比) AS 买卖盘比变化
-    FROM tick_data
-    GROUP BY SecurityID
-    HAVING COUNT(*) >= 5
-)
+    def _build_snapshot_base_query(self, parquet_paths: List[str]) -> str:
+        """旧快照数据源，补齐日线衍生字段以便统一查询。"""
+        def snapshot_select(path: str) -> str:
+            scan = self._build_scan_call([path])
+            return f"""
 SELECT
-    SecurityID AS "股票代码",
-    Symbol AS "股票名称",
-    数据点数,
-    ROUND(主动买入额 / 100000000, 2) AS "主动买入(亿)",
-    ROUND(主动卖出额 / 100000000, 2) AS "主动卖出(亿)",
-    ROUND((主动买入额 - 主动卖出额) / 100000000, 2) AS "净流入(亿)",
-    ROUND(平均买卖盘比, 2) AS "平均买卖盘比",
-    ROUND(买卖盘比变化, 4) AS "买卖盘比变化",
-    -- 资金流入评分
-    CASE
-        WHEN (主动买入额 - 主动卖出额) > 0 AND 买卖盘比变化 > 0 THEN '强流入'
-        WHEN (主动买入额 - 主动卖出额) > 0 THEN '流入'
-        WHEN (主动买入额 - 主动卖出额) < 0 AND 买卖盘比变化 < 0 THEN '强流出'
-        ELSE '流出'
-    END AS "资金状态"
-FROM stock_flow
-{final_where}
-ORDER BY (主动买入额 - 主动卖出额) DESC
-LIMIT {limit}
+    *,
+    CAST(COALESCE(DiffPx1, LastPx - PreClosePx) AS DOUBLE) AS ChangePx,
+    CAST(COALESCE(DiffPx2, (ClosePx - PreClosePx) / NULLIF(PreClosePx, 0) * 100) AS DOUBLE) AS ChangePct,
+    CAST((HighPx - LowPx) / NULLIF(PreClosePx, 0) * 100 AS DOUBLE) AS Amplitude,
+    CAST(NULL AS DOUBLE) AS TurnoverRate,
+    CAST(NULL AS VARCHAR) AS Market
+FROM {scan}
 """
-        return sql
 
-    def _compile_pressure_analysis(self, query_plan: Dict[str, Any], parquet_paths: List[str]) -> str:
-        """
-        编译买卖压力分析（单只股票的时序分析）
-
-        分析指标：
-        1. 委买委卖比时序
-        2. 买卖盘深度（5档汇总）
-        3. 压力转换点
-        """
-        limit = query_plan.get("limit", 100)
-        filters = query_plan.get("filters", [])
-
-        if len(parquet_paths) == 1:
-            base_source = f"parquet_scan('{parquet_paths[0]}')"
-        else:
-            union_queries = [f"SELECT * FROM parquet_scan('{path}')" for path in parquet_paths]
-            base_source = f"({' UNION ALL '.join(union_queries)})"
-
-        where_conditions = []
-        for f in filters:
-            field = f["field"]
-            op = f["op"]
-            value = f["value"]
-            if isinstance(value, str):
-                where_conditions.append(f"{field} {op} '{value}'")
-            else:
-                where_conditions.append(f"{field} {op} {value}")
-
-        where_clause = f"WHERE {' AND '.join(where_conditions)}" if where_conditions else ""
-
-        sql = f"""
-WITH raw_data AS (
-    SELECT *
-    FROM {base_source}
-    {where_clause}
-)
-SELECT
-    SecurityID AS "股票代码",
-    Symbol AS "股票名称",
-    MDTime AS "时间",
-    ROUND(LastPx, 2) AS "最新价",
-    -- 委买委卖比
-    ROUND(
-        CASE WHEN TotalOfferQty > 0 THEN TotalBidQty * 1.0 / TotalOfferQty ELSE 0 END,
-        4
-    ) AS "委买委卖比",
-    -- 5档买盘深度
-    ROUND((
-        COALESCE(Buy1OrderQty, 0) + COALESCE(Buy2OrderQty, 0) +
-        COALESCE(Buy3OrderQty, 0) + COALESCE(Buy4OrderQty, 0) +
-        COALESCE(Buy5OrderQty, 0)
-    ) / 10000, 2) AS "买盘深度(万)",
-    -- 5档卖盘深度
-    ROUND((
-        COALESCE(Sell1OrderQty, 0) + COALESCE(Sell2OrderQty, 0) +
-        COALESCE(Sell3OrderQty, 0) + COALESCE(Sell4OrderQty, 0) +
-        COALESCE(Sell5OrderQty, 0)
-    ) / 10000, 2) AS "卖盘深度(万)",
-    -- 买卖压力差
-    ROUND((
-        (COALESCE(Buy1OrderQty, 0) + COALESCE(Buy2OrderQty, 0) + COALESCE(Buy3OrderQty, 0)) -
-        (COALESCE(Sell1OrderQty, 0) + COALESCE(Sell2OrderQty, 0) + COALESCE(Sell3OrderQty, 0))
-    ) / 10000, 2) AS "压力差(万)",
-    -- 压力状态
-    CASE
-        WHEN TotalBidQty > TotalOfferQty * 1.5 THEN '买压大'
-        WHEN TotalOfferQty > TotalBidQty * 1.5 THEN '卖压大'
-        ELSE '平衡'
-    END AS "压力状态"
-FROM raw_data
-WHERE LastPx IS NOT NULL
-ORDER BY MDTime ASC
-LIMIT {limit}
-"""
-        return sql
+        return " UNION ALL ".join(snapshot_select(path) for path in parquet_paths)
 
     def _build_from_clause(self, parquet_paths: List[str], use_latest_snapshot: bool = True) -> str:
         """
@@ -851,12 +647,12 @@ LIMIT {limit}
             use_latest_snapshot: 是否只选择每个 SecurityID 的最新快照（默认 True）
         """
 
-        # 先构建基础数据源
-        if len(parquet_paths) == 1:
-            base_query = f"SELECT * FROM parquet_scan('{parquet_paths[0]}')"
-        else:
-            union_queries = [f"SELECT * FROM parquet_scan('{path}')" for path in parquet_paths]
-            base_query = f"SELECT * FROM ({' UNION ALL '.join(union_queries)})"
+        is_daily_history = self._is_daily_history_source(parquet_paths)
+        base_query = (
+            self._build_daily_history_base_query(parquet_paths)
+            if is_daily_history
+            else self._build_snapshot_base_query(parquet_paths)
+        )
 
         # 如果需要只选择最新快照，使用窗口函数
         if use_latest_snapshot:
@@ -889,6 +685,10 @@ LIMIT {limit}
                 # 同时修正时间格式
                 if isinstance(value, str):
                     value = self._normalize_time_format(value)
+            elif field == "日期":
+                field = "MDDate"
+                if isinstance(value, str):
+                    value = self._normalize_date_format(value)
 
             # 如果字段是衍生指标，展开表达式
             if field in METRIC_DEFINITIONS:
@@ -898,7 +698,7 @@ LIMIT {limit}
 
             # 构建条件
             if isinstance(value, str):
-                conditions.append(f"{field_expr} {op} '{value}'")
+                conditions.append(f"{field_expr} {op} {self._quote_sql_string(value)}")
             else:
                 conditions.append(f"{field_expr} {op} {value}")
 
@@ -917,7 +717,7 @@ LIMIT {limit}
             value = h["value"]
 
             if isinstance(value, str):
-                conditions.append(f"{field} {op} '{value}'")
+                conditions.append(f"{field} {op} {self._quote_sql_string(value)}")
             else:
                 conditions.append(f"{field} {op} {value}")
 
