@@ -2,7 +2,7 @@
 
 Date : 2026-01-28 16:15:30
 
-Directory /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant
+Directory /Users/brucexu/Desktop/UCLA/Career/Huatai/market-assistant
 
 Total : 38 files,  4736 codes, 2230 comments, 1163 blanks, all 8129 lines
 

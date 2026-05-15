@@ -20,50 +20,50 @@ wheels/
 .installed.cfg
 *.egg
 
-# 虚拟环境
+# Virtual environments
 venv/
 env/
 ENV/
 .venv
 
-# IDE
+# IDE files
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# 测试
+# Tests
 .pytest_cache/
 .coverage
 htmlcov/
 .tox/
 
-# 日志
+# Logs
 *.log
 logs/
 
-# 数据文件（Parquet 文件可能很大）
+# Data files
 data/*.parquet
 data/XSHG_Stock_Snapshot_Level2_Day/
 data/XSHE_Stock_Snapshot_Level2_Day/
 
-# 配置文件（可能包含敏感信息）
+# Local secrets and config
 .env
 *.secret
 secrets/
 *.yaml
 
-# 系统文件
+# System files
 .DS_Store
 Thumbs.db
 
-# 临时文件
+# Temporary files
 *.tmp
 temp/
 tmp/
 
-# 会话数据
+# Session data
 sessions.db
 sessions/
 

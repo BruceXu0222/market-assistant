@@ -7,28 +7,108 @@ Run:
 
 import streamlit as st
 import requests
+import os
+import subprocess
+import sys
+import time
 from datetime import datetime, timedelta
 import pandas as pd
 from typing import Optional, Dict, Any
 import json
 
-# ============================================================================
-# 配置
-# ============================================================================
-
-# FastAPI 服务地址
-API_BASE_URL = "http://localhost:8080"
-
-# 页面配置
 st.set_page_config(
     page_title="Market Assistant",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
 
-# ============================================================================
-# 自定义样式
-# ============================================================================
+
+def get_streamlit_secret(name: str, default: Optional[str] = None) -> Optional[str]:
+    """Read a root-level Streamlit secret without failing outside Streamlit Cloud."""
+    try:
+        return st.secrets.get(name, default)
+    except Exception:
+        return default
+
+
+def get_nested_streamlit_secret(section: str, name: str, default: Optional[str] = None) -> Optional[str]:
+    """Read a nested Streamlit secret such as [llm] api_key = ... ."""
+    try:
+        return st.secrets.get(section, {}).get(name, default)
+    except Exception:
+        return default
+
+
+def configure_env_from_streamlit_secrets() -> None:
+    """Expose Streamlit Cloud secrets to the backend subprocess."""
+    secret_mappings = {
+        "OPENAI_API_KEY": get_streamlit_secret("OPENAI_API_KEY") or get_nested_streamlit_secret("llm", "api_key"),
+        "OPENAI_BASE_URL": get_streamlit_secret("OPENAI_BASE_URL") or get_nested_streamlit_secret("llm", "base_url"),
+        "OPENAI_MODEL": get_streamlit_secret("OPENAI_MODEL") or get_nested_streamlit_secret("llm", "model"),
+    }
+    for key, value in secret_mappings.items():
+        if value and not os.getenv(key):
+            os.environ[key] = str(value)
+
+
+configure_env_from_streamlit_secrets()
+
+API_BASE_URL = (
+    os.getenv("API_BASE_URL")
+    or get_streamlit_secret("API_BASE_URL")
+    or get_nested_streamlit_secret("streamlit", "api_base_url")
+    or "http://localhost:8080"
+).rstrip("/")
+
+
+def is_local_api_url(url: str) -> bool:
+    """Return whether the UI expects an API running in the same container."""
+    return url.startswith("http://localhost") or url.startswith("http://127.0.0.1")
+
+
+def api_health(api_base_url: str, timeout: int = 5) -> bool:
+    """Check whether an API URL is reachable."""
+    try:
+        response = requests.get(f"{api_base_url}/health", timeout=timeout)
+        return response.status_code == 200
+    except Exception:
+        return False
+
+
+@st.cache_resource(show_spinner=False)
+def ensure_local_api_started(api_base_url: str) -> bool:
+    """Start FastAPI when Streamlit is the only launched process."""
+    if not is_local_api_url(api_base_url):
+        return True
+
+    if api_health(api_base_url, timeout=2):
+        return True
+
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "app.api:app",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "8080",
+        ],
+        cwd=repo_root,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.STDOUT,
+    )
+
+    for _ in range(30):
+        if process.poll() is not None:
+            return False
+        if api_health(api_base_url, timeout=2):
+            return True
+        time.sleep(1)
+
+    return False
 
 st.markdown("""
 <style>
@@ -59,10 +139,6 @@ footer {
 </style>
 """, unsafe_allow_html=True)
 
-# ============================================================================
-# 会话状态初始化
-# ============================================================================
-
 if "session_id" not in st.session_state:
     st.session_state.session_id = None
 
@@ -72,17 +148,11 @@ if "messages" not in st.session_state:
 if "debug_mode" not in st.session_state:
     st.session_state.debug_mode = False
 
-# ============================================================================
-# 辅助函数
-# ============================================================================
+local_api_ready = ensure_local_api_started(API_BASE_URL)
 
 def check_api_health() -> bool:
     """Check whether the API service is reachable."""
-    try:
-        response = requests.get(f"{API_BASE_URL}/health", timeout=5)
-        return response.status_code == 200
-    except Exception:
-        return False
+    return api_health(API_BASE_URL)
 
 
 def call_chat_api(
@@ -113,7 +183,13 @@ def call_chat_api(
         return data
 
     except requests.exceptions.ConnectionError:
-        return {"error": "Cannot connect to the API service. Please start the backend first."}
+        return {
+            "error": (
+                "Cannot connect to the API service. If you are using Streamlit Cloud, "
+                "set API_BASE_URL to your deployed backend URL or check that the local "
+                "backend subprocess started successfully."
+            )
+        }
     except requests.exceptions.RequestException as e:
         return {"error": f"API request failed: {e}"}
 
@@ -162,8 +238,8 @@ def prepare_chart_data(table_data: list) -> Optional[Dict[str, Any]]:
             }
 
     preferred_metrics = [
-        "涨幅", "ChangePct", "换手率", "TurnoverRate",
-        "TotalValueTrade", "TotalVolumeTrade", "Amplitude", "ClosePx",
+        "ChangePct", "TurnoverRate", "TotalValueTrade",
+        "TotalVolumeTrade", "Amplitude", "ClosePx",
     ]
     metric = next((col for col in preferred_metrics if col in numeric_cols), None)
     if not metric:
@@ -228,12 +304,12 @@ def render_field_explanations(field_explanations: Dict[str, str]) -> None:
             st.markdown(f"**{field}**：{explanation}")
 
 
-# ============================================================================
-# 侧边栏配置
-# ============================================================================
-
 with st.sidebar:
     st.title("Settings")
+    st.caption(f"API: {API_BASE_URL}")
+
+    if not local_api_ready:
+        st.warning("API backend is not reachable.")
 
     if st.button("Check API Status"):
         if check_api_health():
@@ -286,18 +362,10 @@ with st.sidebar:
     - Historical price trends
     """)
 
-# ============================================================================
-# 主界面 - 对话式布局
-# ============================================================================
-
 st.title("Market Assistant")
 st.caption("GPT-5.5 + DuckDB stock market analysis for HK and US daily data")
 
 st.markdown("---")
-
-# ============================================================================
-# 显示对话历史
-# ============================================================================
 
 for msg in st.session_state.messages:
     if msg["role"] == "user":
@@ -327,17 +395,13 @@ for msg in st.session_state.messages:
             if st.session_state.debug_mode and msg.get("debug"):
                 render_debug_info(msg["debug"])
 
-# ============================================================================
-# 示例问题（仅在没有对话时显示）
-# ============================================================================
-
 if not st.session_state.messages:
     st.markdown("### Try These Questions")
 
     col1, col2 = st.columns(2)
 
     example_queries = [
-        "Which HK stocks had the highest turnover today?",
+        "How many HK stocks rose and fell today?",
         "Show the 10 biggest US stock decliners today",
         "Which stocks have turnover rate above 5% today?",
         "Show Tesla's price trend in January 2025",
@@ -358,10 +422,6 @@ if not st.session_state.messages:
         if st.button(example_queries[3], use_container_width=True):
             st.session_state.pending_query = example_queries[3]
             st.rerun()
-
-# ============================================================================
-# 处理待处理的查询（来自示例按钮）
-# ============================================================================
 
 if "pending_query" in st.session_state:
     query = st.session_state.pending_query
@@ -389,10 +449,6 @@ if "pending_query" in st.session_state:
         st.session_state.messages.append(assistant_msg)
 
     st.rerun()
-
-# ============================================================================
-# Chat input
-# ============================================================================
 
 if prompt := st.chat_input("Ask a market question, e.g. Which US stocks fell the most today?"):
     st.session_state.messages.append({"role": "user", "content": prompt})

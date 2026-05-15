@@ -2,7 +2,7 @@
 
 Date : 2026-01-28 16:15:30
 
-Directory /Users/brucexu/Desktop/UCLA/Career/华泰/market-assistant
+Directory /Users/brucexu/Desktop/UCLA/Career/Huatai/market-assistant
 
 Total : 0 files,  0 codes, 0 comments, 0 blanks, all 0 lines
 

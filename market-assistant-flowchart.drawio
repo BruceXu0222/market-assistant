@@ -1,172 +1,190 @@
-<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" version="29.3.4">
-  <diagram name="Market Assistant Flowchart" id="flowchart">
-    <mxGraphModel dx="1502" dy="968" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1200" background="#ffffff" math="0" shadow="0">
+<mxfile host="app.diagrams.net" version="29.3.4">
+  <diagram name="Market Assistant Current Workflow" id="market-assistant-current-workflow">
+    <mxGraphModel dx="1800" dy="1200" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1350" background="#ffffff" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
-        <mxCell id="title" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=24;fontStyle=1" value="Intelligent Market Analysis Assistant Flowchart" vertex="1">
-          <mxGeometry height="40" width="400" x="447" y="9" as="geometry" />
+
+        <mxCell id="title" value="Market Assistant Current Workflow" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=26;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="600" y="30" width="600" height="40" as="geometry" />
         </mxCell>
-        <mxCell id="ui" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;fontStyle=1" value="Streamlit UI&#xa;(app/ui_streamlit.py)" vertex="1">
-          <mxGeometry height="60" width="160" x="280" y="110" as="geometry" />
+        <mxCell id="subtitle" value="Streamlit + FastAPI + LLM QueryPlan + DuckDB over HK/US parquet files" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontColor=#666666" vertex="1" parent="1">
+          <mxGeometry x="530" y="72" width="740" height="30" as="geometry" />
         </mxCell>
-        <mxCell id="edge1" edge="1" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="ui" value="Input natural language query">
-          <mxGeometry relative="1" as="geometry">
-            <mxPoint x="140" y="140" as="sourcePoint" />
-          </mxGeometry>
+
+        <mxCell id="lane_ui" value="Frontend" style="swimlane;html=1;startSize=34;horizontal=0;fillColor=#fff7e6;strokeColor=#d79b00;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="70" y="130" width="330" height="980" as="geometry" />
         </mxCell>
-        <mxCell id="api" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;fontStyle=1" value="FastAPI Deployment&lt;br&gt;(app/api.py)" vertex="1">
-          <mxGeometry height="60" width="160" x="660" y="110" as="geometry" />
+        <mxCell id="lane_api" value="API Orchestration" style="swimlane;html=1;startSize=34;horizontal=0;fillColor=#f8f9fa;strokeColor=#666666;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="450" y="130" width="430" height="980" as="geometry" />
         </mxCell>
-        <mxCell id="edge2" edge="1" parent="1" source="ui" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="api" value="POST /chat">
+        <mxCell id="lane_llm" value="LLM Boundary" style="swimlane;html=1;startSize=34;horizontal=0;fillColor=#eaf4ff;strokeColor=#6c8ebf;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="930" y="130" width="310" height="980" as="geometry" />
+        </mxCell>
+        <mxCell id="lane_data" value="Deterministic Data Layer" style="swimlane;html=1;startSize=34;horizontal=0;fillColor=#eaf7ea;strokeColor=#82b366;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="1290" y="130" width="420" height="980" as="geometry" />
+        </mxCell>
+
+        <mxCell id="user" value="User" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fontSize=13" vertex="1" parent="lane_ui">
+          <mxGeometry x="35" y="65" width="40" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="streamlit" value="Streamlit UI&lt;br&gt;app/ui_streamlit.py&lt;br&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;chat input, defaults, debug toggle&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;fontStyle=1" vertex="1" parent="lane_ui">
+          <mxGeometry x="115" y="70" width="175" height="82" as="geometry" />
+        </mxCell>
+        <mxCell id="render" value="Render Response&lt;br&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;chart, table, commentary,&lt;br&gt;debug expander&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;fontStyle=1" vertex="1" parent="lane_ui">
+          <mxGeometry x="115" y="770" width="175" height="86" as="geometry" />
+        </mxCell>
+
+        <mxCell id="api_chat" value="POST /chat&lt;br&gt;ChatRequest" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontStyle=1" vertex="1" parent="lane_api">
+          <mxGeometry x="110" y="70" width="200" height="64" as="geometry" />
+        </mxCell>
+        <mxCell id="session_defaults" value="1. Session + UI Defaults&lt;br&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;get/create session&lt;br&gt;normalize date and market&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13" vertex="1" parent="lane_api">
+          <mxGeometry x="110" y="175" width="200" height="82" as="geometry" />
+        </mxCell>
+        <mxCell id="plan_gen" value="2. Generate QueryPlan&lt;br&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;LLMQueryPlanner.generate_plan()&lt;br&gt;recent history context&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontStyle=1" vertex="1" parent="lane_api">
+          <mxGeometry x="110" y="300" width="200" height="86" as="geometry" />
+        </mxCell>
+        <mxCell id="apply_defaults" value="3. Enforce Request Defaults&lt;br&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;apply_ui_defaults_to_plan()&lt;br&gt;explicit market/date override only&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13" vertex="1" parent="lane_api">
+          <mxGeometry x="110" y="425" width="200" height="86" as="geometry" />
+        </mxCell>
+        <mxCell id="chat_decision" value="query_type is&lt;br&gt;chat/invalid?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;fontStyle=1" vertex="1" parent="lane_api">
+          <mxGeometry x="140" y="545" width="140" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="validate" value="4. Validate Plan&lt;br&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;field/operator/schema checks&lt;br&gt;infer query_type if missing&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13" vertex="1" parent="lane_api">
+          <mxGeometry x="110" y="675" width="200" height="86" as="geometry" />
+        </mxCell>
+        <mxCell id="chat_answer" value="Direct Answer&lt;br&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;no DuckDB query&lt;br&gt;append history&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13" vertex="1" parent="lane_api">
+          <mxGeometry x="300" y="560" width="120" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="postprocess" value="8. Post-process Result&lt;br&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;filter relevant columns&lt;br&gt;translate Symbol to English&lt;br&gt;build table + summary&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13" vertex="1" parent="lane_api">
+          <mxGeometry x="110" y="805" width="200" height="96" as="geometry" />
+        </mxCell>
+        <mxCell id="history_response" value="10. Store History + Return&lt;br&gt;ChatResponse&lt;br&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;table, summary, commentary,&lt;br&gt;optional debug&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontStyle=1" vertex="1" parent="lane_api">
+          <mxGeometry x="110" y="925" width="200" height="96" as="geometry" />
+        </mxCell>
+
+        <mxCell id="llm_service" value="OpenAI-compatible&lt;br&gt;Chat Completion&lt;br&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;intent planning and narration only&lt;/font&gt;" style="ellipse;whiteSpace=wrap;html=1;fillColor=#cce5ff;strokeColor=#6c8ebf;fontSize=13;fontStyle=1" vertex="1" parent="lane_llm">
+          <mxGeometry x="55" y="300" width="200" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="query_plan_json" value="QueryPlan JSON&lt;br&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;market, date/date_range&lt;br&gt;query_type, fields&lt;br&gt;filters, order_by, limit&lt;/font&gt;" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;fillColor=#f5f5f5;strokeColor=#666666;fontSize=12" vertex="1" parent="lane_llm">
+          <mxGeometry x="55" y="425" width="200" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="commentary_llm" value="9. Commentary Prompt&lt;br&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;generate_commentary()&lt;br&gt;uses plan + result summary&lt;br&gt;must not invent numbers&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#cce5ff;strokeColor=#6c8ebf;fontSize=13;fontStyle=1" vertex="1" parent="lane_llm">
+          <mxGeometry x="55" y="805" width="200" height="96" as="geometry" />
+        </mxCell>
+        <mxCell id="llm_note" value="The LLM does not compute financial metrics. All filtering, sorting, aggregation, and time-series retrieval happen in DuckDB." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=12;fontColor=#333333" vertex="1" parent="lane_llm">
+          <mxGeometry x="45" y="650" width="220" height="82" as="geometry" />
+        </mxCell>
+
+        <mxCell id="path_resolver" value="5. Resolve Parquet Paths&lt;br&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;PathResolver.resolve(date, market)&lt;br&gt;HK, US, or ALL&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontStyle=1" vertex="1" parent="lane_data">
+          <mxGeometry x="105" y="175" width="210" height="86" as="geometry" />
+        </mxCell>
+        <mxCell id="parquet_store" value="Local Parquet Data&lt;br&gt;&lt;br&gt;data/hk/*.parquet&lt;br&gt;data/us/*.parquet&lt;br&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;one daily-history file per stock&lt;/font&gt;" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#e1f0d8;strokeColor=#82b366;fontSize=13" vertex="1" parent="lane_data">
+          <mxGeometry x="105" y="295" width="210" height="118" as="geometry" />
+        </mxCell>
+        <mxCell id="sql_compiler" value="6. Compile SQL&lt;br&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;SQLCompilerEnhanced.compile()&lt;br&gt;normalizes raw columns&lt;br&gt;basic/filter/raw_data/stats&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontStyle=1" vertex="1" parent="lane_data">
+          <mxGeometry x="105" y="455" width="210" height="96" as="geometry" />
+        </mxCell>
+        <mxCell id="sql_artifact" value="Generated DuckDB SQL&lt;br&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;parquet_scan(..., union_by_name=true)&lt;br&gt;WHERE / GROUP BY / ORDER BY&lt;br&gt;LIMIT&lt;/font&gt;" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;fillColor=#f5f5f5;strokeColor=#666666;fontFamily=Courier New;fontSize=12" vertex="1" parent="lane_data">
+          <mxGeometry x="105" y="590" width="210" height="104" as="geometry" />
+        </mxCell>
+        <mxCell id="duckdb" value="7. Execute with DuckDB&lt;br&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;in-memory connection&lt;br&gt;returns pandas DataFrame&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontStyle=1" vertex="1" parent="lane_data">
+          <mxGeometry x="105" y="735" width="210" height="86" as="geometry" />
+        </mxCell>
+        <mxCell id="dataframe" value="DataFrame&lt;br&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;deterministic query result&lt;/font&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=12;fontFamily=Courier New" vertex="1" parent="lane_data">
+          <mxGeometry x="105" y="870" width="210" height="64" as="geometry" />
+        </mxCell>
+
+        <mxCell id="debug_payload" value="Debug Mode Payload&lt;br&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;QueryPlan JSON&lt;br&gt;SQL&lt;br&gt;parquet paths&lt;br&gt;validation warnings&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="635" y="1165" width="230" height="105" as="geometry" />
+        </mxCell>
+        <mxCell id="langgraph_note" value="Workflow package note: workflow/graph.py contains an experimental LangGraph path: router -&gt; plan_gen -&gt; validate -&gt; repair -&gt; execute -&gt; postprocess -&gt; narrate -&gt; memory_update. The Streamlit/FastAPI path above is the active application flow." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=12;fontColor=#333333" vertex="1" parent="1">
+          <mxGeometry x="930" y="1165" width="600" height="85" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e_user_ui" value="natural-language question" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=11" edge="1" parent="lane_ui" source="user" target="streamlit">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="session" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" value="1. Session Management&#xa;Get/Create Session" vertex="1">
-          <mxGeometry height="50" width="160" x="660" y="225" as="geometry" />
-        </mxCell>
-        <mxCell id="edge3" edge="1" parent="1" source="api" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="session" value="">
+        <mxCell id="e_ui_api" value="message, session_id,&lt;br&gt;default_date, default_market, debug" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=11" edge="1" parent="1" source="streamlit" target="api_chat">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="planner" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1" value="2. Query SQL Generation&lt;br&gt;(LLMQueryPlanner)" vertex="1">
-          <mxGeometry height="50" width="160" x="660" y="330" as="geometry" />
-        </mxCell>
-        <mxCell id="edge4" edge="1" parent="1" source="session" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="planner" value="">
+        <mxCell id="e_api_session" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1" edge="1" parent="lane_api" source="api_chat" target="session_defaults">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="edge5" edge="1" parent="1" source="planner" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;" value="Call LLM">
-          <mxGeometry relative="1" as="geometry">
-            <mxPoint x="894" y="355.08695652173924" as="targetPoint" />
-          </mxGeometry>
-        </mxCell>
-        <mxCell id="validate" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" value="3. Plan Validation&#xa;Field Whitelist Check" vertex="1">
-          <mxGeometry height="50" width="160" x="660" y="410" as="geometry" />
-        </mxCell>
-        <mxCell id="edge7" edge="1" parent="1" source="planner" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="validate" value="">
+        <mxCell id="e_session_plan" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1" edge="1" parent="lane_api" source="session_defaults" target="plan_gen">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="9oDkck2najl1t2X8zdxE-4" edge="1" parent="1" source="validate_check" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="validate" value="">
+        <mxCell id="e_plan_llm" value="planning prompt" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;fontSize=11" edge="1" parent="1" source="plan_gen" target="llm_service">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="validate_check" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" value="Validation Passed?" vertex="1">
-          <mxGeometry height="60" width="120" x="680" y="490" as="geometry" />
-        </mxCell>
-        <mxCell id="edge8" edge="1" parent="1" source="validate" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="validate_check" value="">
+        <mxCell id="e_llm_json" value="JSON only" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;fontSize=11" edge="1" parent="lane_llm" source="llm_service" target="query_plan_json">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="repair" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" value="Plan Repair&#xa;(Repair Node)" vertex="1">
-          <mxGeometry height="50" width="120" x="490" y="495" as="geometry" />
-        </mxCell>
-        <mxCell id="edge9" edge="1" parent="1" source="validate_check" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="repair" value="No">
+        <mxCell id="e_json_defaults" value="parse + query hints" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=11" edge="1" parent="1" source="query_plan_json" target="apply_defaults">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="edge10" edge="1" parent="1" source="repair" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;" target="planner" value="Re-validate">
+        <mxCell id="e_defaults_decision" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1" edge="1" parent="lane_api" source="apply_defaults" target="chat_decision">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_chat_direct" value="yes" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=11" edge="1" parent="lane_api" source="chat_decision" target="chat_answer">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_market_validate" value="no: market data query" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=11" edge="1" parent="lane_api" source="chat_decision" target="validate">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_validate_path" value="date + market" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=11" edge="1" parent="1" source="validate" target="path_resolver">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_paths_store" value="glob patterns" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=11" edge="1" parent="lane_data" source="path_resolver" target="parquet_store">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_store_compile" value="paths + QueryPlan" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=11" edge="1" parent="lane_data" source="parquet_store" target="sql_compiler">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_compile_sql" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1" edge="1" parent="lane_data" source="sql_compiler" target="sql_artifact">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_sql_duckdb" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1" edge="1" parent="lane_data" source="sql_artifact" target="duckdb">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_duckdb_df" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1" edge="1" parent="lane_data" source="duckdb" target="dataframe">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_df_postprocess" value="DataFrame" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=11" edge="1" parent="1" source="dataframe" target="postprocess">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_post_narrate" value="summary + result count" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=11" edge="1" parent="1" source="postprocess" target="commentary_llm">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_narrate_history" value="commentary" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;fontSize=11" edge="1" parent="1" source="commentary_llm" target="history_response">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_direct_history" value="answer" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=11" edge="1" parent="lane_api" source="chat_answer" target="history_response">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
-              <mxPoint x="440" y="520" />
-              <mxPoint x="440" y="355" />
+              <mxPoint x="380" y="600" />
+              <mxPoint x="380" y="973" />
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="path_resolve" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" value="4. Data Path Resolution&#xa;resolve_parquet_paths()" vertex="1">
-          <mxGeometry height="50" width="160" x="660" y="580" as="geometry" />
-        </mxCell>
-        <mxCell id="edge11" edge="1" parent="1" source="validate_check" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="path_resolve" value="Yes">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="parquet" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="Parquet Data Files&lt;br&gt;&lt;br&gt;data/XSHG_Stock_...&lt;br&gt;data/XSHE_Stock_..." vertex="1">
-          <mxGeometry height="69" width="135" x="910" y="570.5" as="geometry" />
-        </mxCell>
-        <mxCell id="edge12" edge="1" parent="1" source="path_resolve" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;" target="parquet" value="Locate Files">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="sql" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;align=left;fontFamily=Courier New;" value="DuckDB SQL&#xa;&#xa;SELECT ... FROM&#xa;parquet_scan(...)&#xa;WHERE ... ORDER BY ...&#xa;LIMIT ..." vertex="1">
-          <mxGeometry height="90" width="200" x="898" y="313" as="geometry" />
-        </mxCell>
-        <mxCell id="duckdb" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1" value="5. DuckDB Execution&lt;br&gt;duckdb.execute(sql)" vertex="1">
-          <mxGeometry height="50" width="160" x="660" y="657" as="geometry" />
-        </mxCell>
-        <mxCell id="edge15" edge="1" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="duckdb" value="">
-          <mxGeometry relative="1" as="geometry">
-            <mxPoint x="740.0434782608697" y="633" as="sourcePoint" />
-          </mxGeometry>
-        </mxCell>
-        <mxCell id="dataframe" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;align=left;fontFamily=Courier New;" value="Query Results&lt;br&gt;&lt;br&gt;SecurityID | Symbol | ...&lt;br&gt;600000 | SPDB | ..." vertex="1">
-          <mxGeometry height="80" width="200" x="890" y="652" as="geometry" />
-        </mxCell>
-        <mxCell id="postprocess" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" value="6. Result Post-processing&lt;br&gt;Column Filtering, Formatting" vertex="1">
-          <mxGeometry height="50" width="160" x="660" y="737" as="geometry" />
-        </mxCell>
-        <mxCell id="edge17" edge="1" parent="1" source="duckdb" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="postprocess" value="">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="narrate" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1" value="7. Generate Result Interpretation&lt;br&gt;(generate_commentary)" vertex="1">
-          <mxGeometry height="50" width="160" x="660" y="817" as="geometry" />
-        </mxCell>
-        <mxCell id="edge18" edge="1" parent="1" source="postprocess" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="narrate" value="">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="narrate_prompt" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;align=left;verticalAlign=top;fontColor=#333333;" value="Result Interpretation&lt;br&gt;&lt;br&gt;- Professional terminology&lt;br&gt;- Based on data facts" vertex="1">
-          <mxGeometry height="90" width="200" x="890" y="797" as="geometry" />
-        </mxCell>
-        <mxCell id="edge19" edge="1" parent="1" source="narrate" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;" target="narrate_prompt" value="Call LLM">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="edge22" edge="1" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" value="Return Results">
+        <mxCell id="e_response_ui" value="JSON response" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=11" edge="1" parent="1" source="history_response" target="render">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
-              <mxPoint x="744" y="867" />
-              <mxPoint x="744" y="918" />
-              <mxPoint x="371" y="918" />
+              <mxPoint x="560" y="1150" />
+              <mxPoint x="235" y="1150" />
             </Array>
-            <mxPoint x="744" y="867" as="sourcePoint" />
-            <mxPoint x="371" y="174" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="9oDkck2najl1t2X8zdxE-2" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" value="User" vertex="1">
-          <mxGeometry height="60" width="30" x="110" y="117" as="geometry" />
+        <mxCell id="e_debug_response" value="when debug=true" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;fontSize=11" edge="1" parent="1" source="history_response" target="debug_payload">
+          <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="9oDkck2najl1t2X8zdxE-8" edge="1" parent="1" source="9oDkck2najl1t2X8zdxE-3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="9oDkck2najl1t2X8zdxE-6">
+        <mxCell id="e_debug_ui" value="shown in Streamlit expander" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;fontSize=11" edge="1" parent="1" source="debug_payload" target="render">
           <mxGeometry relative="1" as="geometry">
-            <mxPoint x="968.7692307692305" y="92" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="635" y="1220" />
+              <mxPoint x="235" y="1220" />
+            </Array>
           </mxGeometry>
-        </mxCell>
-        <mxCell id="9oDkck2najl1t2X8zdxE-3" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#FF3333;" value="" vertex="1">
-          <mxGeometry height="244" width="662" x="273" y="56" as="geometry" />
-        </mxCell>
-        <mxCell id="9oDkck2najl1t2X8zdxE-6" parent="1" style="text;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;rounded=1;fillColor=#f8cecc;strokeColor=#b85450;glass=0;shadow=1;" value="&lt;font style=&quot;font-size: 40px;&quot;&gt;Frontend Display Module&lt;/font&gt;" vertex="1">
-          <mxGeometry height="55" width="265" x="1005" y="64" as="geometry" />
-        </mxCell>
-        <mxCell id="9oDkck2najl1t2X8zdxE-11" edge="1" parent="1" source="9oDkck2najl1t2X8zdxE-9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="9oDkck2najl1t2X8zdxE-10">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="9oDkck2najl1t2X8zdxE-9" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#FF3333;" value="" vertex="1">
-          <mxGeometry height="253" width="822" x="336" y="308" as="geometry" />
-        </mxCell>
-        <mxCell id="9oDkck2najl1t2X8zdxE-10" parent="1" style="text;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;rounded=1;fillColor=#f8cecc;strokeColor=#b85450;glass=0;shadow=1;" value="&lt;font style=&quot;font-size: 40px;&quot;&gt;Query Generation Module&lt;/font&gt;" vertex="1">
-          <mxGeometry height="55" width="265" x="1267" y="407" as="geometry" />
-        </mxCell>
-        <mxCell id="9oDkck2najl1t2X8zdxE-15" edge="1" parent="1" source="duckdb" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=-0.002;entryY=0.384;entryDx=0;entryDy=0;entryPerimeter=0;" target="dataframe">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="9oDkck2najl1t2X8zdxE-18" edge="1" parent="1" source="9oDkck2najl1t2X8zdxE-16" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;">
-          <mxGeometry relative="1" as="geometry">
-            <mxPoint x="1265.6923076923076" y="647.3846153846152" as="targetPoint" />
-          </mxGeometry>
-        </mxCell>
-        <mxCell id="9oDkck2najl1t2X8zdxE-16" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#FF3333;" value="" vertex="1">
-          <mxGeometry height="183.5" width="624" x="544" y="555.5" as="geometry" />
-        </mxCell>
-        <mxCell id="9oDkck2najl1t2X8zdxE-17" parent="1" style="text;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;rounded=1;fillColor=#f8cecc;strokeColor=#b85450;glass=0;shadow=1;" value="&lt;font style=&quot;font-size: 40px;&quot;&gt;Query Execution Module&lt;/font&gt;" vertex="1">
-          <mxGeometry height="55" width="265" x="1267" y="619.75" as="geometry" />
-        </mxCell>
-        <mxCell id="9oDkck2najl1t2X8zdxE-22" edge="1" parent="1" source="9oDkck2najl1t2X8zdxE-19" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="9oDkck2najl1t2X8zdxE-21">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="9oDkck2najl1t2X8zdxE-19" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#FF3333;" value="" vertex="1">
-          <mxGeometry height="183.5" width="624" x="550" y="732" as="geometry" />
-        </mxCell>
-        <mxCell id="9oDkck2najl1t2X8zdxE-21" parent="1" style="text;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;rounded=1;fillColor=#f8cecc;strokeColor=#b85450;glass=0;shadow=1;" value="&lt;font style=&quot;font-size: 40px;&quot;&gt;Result Interpretation Module&lt;/font&gt;" vertex="1">
-          <mxGeometry height="55" width="265" x="1267" y="796.25" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>

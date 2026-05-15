@@ -1,14 +1,4 @@
-"""
-基于 LLM 的查询计划生成器
-========================
-
-使用 LLM 替代固定的 Pydantic Schema 进行灵活的查询计划生成。
-
-LLM 生成 JSON 格式的查询计划，结构更加灵活：
-- LLM 理解用户意图并决定使用哪些字段/指标
-- 通过字段白名单确保安全性（生成后检查）
-- 支持复杂查询，不受预定义 query_type 限制
-"""
+"""LLM-based query planner for HK and US daily stock data."""
 
 from typing import Dict, Any, Optional, List, Tuple
 import json
@@ -17,60 +7,39 @@ from datetime import datetime, timedelta
 
 from core.llm_client import LLMClient
 
-# ============================================================================
-# 字段和指标定义（用于安全校验和提示词引导）
-# ============================================================================
-
-# 完整字段定义，包含数据类型和说明
-# 格式: {字段名: (数据类型, 中文说明)}
 FIELD_SCHEMA = {
-    # 基本信息字段
-    "Market": ("string", "市场代码: HK=港股, US=美股"),
-    "MDDate": ("string", "行情日期YYYYMMDD"),
-    "SecurityID": ("string", "产品代码（股票代码）"),
-    "Symbol": ("string", "产品名称（股票简称）"),
-    "HTSCSecurityID": ("string", "完整代码（如00700.HK、AAPL.US）"),
-
-    # 价格字段
-    "PreClosePx": ("double", "前收价"),
-    "LastPx": ("double", "当前日收盘价"),
-    "OpenPx": ("double", "开盘价"),
-    "ClosePx": ("double", "收盘价"),
-    "HighPx": ("double", "最高价"),
-    "LowPx": ("double", "最低价"),
-
-    # 成交字段
-    "TotalVolumeTrade": ("double", "成交总量（股数）"),
-    "TotalValueTrade": ("double", "成交总金额（元）"),
-    "ChangePx": ("double", "涨跌额"),
-    "ChangePct": ("double", "涨跌幅百分比"),
-    "Amplitude": ("double", "振幅百分比"),
-    "TurnoverRate": ("double", "换手率百分比"),
+    "Market": ("string", "Market code: HK or US"),
+    "MDDate": ("string", "Trading date in YYYYMMDD format"),
+    "SecurityID": ("string", "Ticker or local stock code"),
+    "Symbol": ("string", "English stock display name"),
+    "HTSCSecurityID": ("string", "Full code, such as 00700.HK or AAPL.US"),
+    "PreClosePx": ("double", "Previous close"),
+    "LastPx": ("double", "Latest close"),
+    "OpenPx": ("double", "Open price"),
+    "ClosePx": ("double", "Close price"),
+    "HighPx": ("double", "High price"),
+    "LowPx": ("double", "Low price"),
+    "TotalVolumeTrade": ("double", "Daily volume"),
+    "TotalValueTrade": ("double", "Daily traded value"),
+    "ChangePx": ("double", "Price change"),
+    "ChangePct": ("double", "Percent change"),
+    "Amplitude": ("double", "Amplitude percentage"),
+    "TurnoverRate": ("double", "Turnover-rate percentage"),
 }
 
-# 基础字段（用于向后兼容）
 BASE_FIELDS = {k: v[1] for k, v in FIELD_SCHEMA.items()}
 
-# 衍生指标（在 SQL 中计算）
 DERIVED_METRICS = {
-    "涨幅": "ChangePct",
-    "跌幅": "-ChangePct",
-    "振幅": "Amplitude",
-    "换手率": "TurnoverRate",
+    "GainPct": "ChangePct",
+    "LossPct": "-ChangePct",
 }
 
-# 所有允许的字段（基础字段 + 衍生指标）
 ALL_ALLOWED_FIELDS = set(BASE_FIELDS.keys()) | set(DERIVED_METRICS.keys())
-
-# 允许的 SQL 操作符
 ALLOWED_OPERATORS = {">", "<", "=", ">=", "<=", "!=", "LIKE", "IN", "BETWEEN"}
-
-# 允许的聚合函数
 ALLOWED_AGG_FUNCS = {"SUM", "AVG", "COUNT", "MAX", "MIN", "STDDEV", "VARIANCE"}
 
 
 # ============================================================================
-# LLM 系统提示词
 # ============================================================================
 
 PLANNER_SYSTEM_PROMPT = """You are a stock-market query planner. Convert the user's English natural-language question into a structured QueryPlan JSON object.
@@ -91,7 +60,7 @@ Fields:
 - Market: HK or US
 - MDDate: trading date, YYYYMMDD
 - SecurityID: stock code, e.g. 00700 or AAPL
-- Symbol: stock name as stored in the dataset; many names are Chinese, e.g. 腾讯控股, 苹果, 特斯拉
+- Symbol: English stock display name when available
 - HTSCSecurityID: full code, e.g. 00700.HK or AAPL.US
 - OpenPx, ClosePx, LastPx, HighPx, LowPx, PreClosePx
 - TotalVolumeTrade: daily volume
@@ -102,10 +71,8 @@ Fields:
 - TurnoverRate: turnover-rate percentage
 
 Derived metrics:
-- 涨幅: ChangePct
-- 跌幅: -ChangePct
-- 振幅: Amplitude
-- 换手率: TurnoverRate
+- GainPct: ChangePct
+- LossPct: -ChangePct
 
 Markets:
 - HK: Hong Kong stocks
@@ -120,6 +87,7 @@ Important constraints:
 - HK/US data has no limit-up/limit-down or order-book fields. Do not generate plans for those concepts.
 - For historical price/trend questions, use query_type "raw_data", date_range, order by MDDate ascending, and include ClosePx.
 - Always include SecurityID and Symbol for stock-level output. Include Market when market may be ALL.
+- Any Chinese stock names returned by the raw data must be translated to English before final display or narration.
 
 Output shape:
 {
@@ -217,24 +185,11 @@ User: What does percent change mean?
 """
 
 
-# ============================================================================
-# LLM 查询计划生成器
-# ============================================================================
-
 class LLMQueryPlanner:
-    """
-    基于 LLM 的查询计划生成器
-
-    使用 LLM 理解用户意图并生成灵活的查询计划。
-    """
+    """Generate and validate QueryPlans from natural-language questions."""
 
     def __init__(self, llm_client: Optional[LLMClient] = None):
-        """
-        初始化计划生成器。
-
-        参数:
-            llm_client: LLM 客户端实例。如果为 None，则创建新实例。
-        """
+        """Initialize the planner."""
         self.llm_client = llm_client or LLMClient()
 
     def generate_plan(
@@ -244,30 +199,15 @@ class LLMQueryPlanner:
         default_market: str = "ALL",
         context: Optional[Dict[str, Any]] = None,
     ) -> Tuple[Dict[str, Any], List[str]]:
-        """
-        从自然语言生成查询计划。
-
-        参数:
-            user_query: 用户的自然语言查询
-            default_date: 默认日期（YYYYMMDD 格式）
-            default_market: 默认市场代码
-            context: 额外上下文（对话历史等）
-
-        返回:
-            (query_plan, validation_errors) 元组
-            - query_plan: 生成的计划字典
-            - validation_errors: 验证错误列表（如果有效则为空）
-        """
+        """Generate a QueryPlan and validation errors from a user question."""
 
         # If no default date is provided, use yesterday as a fallback.
         if not default_date:
             yesterday = datetime.now() - timedelta(days=1)
             default_date = yesterday.strftime("%Y%m%d")
 
-        # 构建提示词
         prompt = self._build_prompt(user_query, default_date, default_market, context)
 
-        # 调用 LLM
         try:
             response = self.llm_client.chat(
                 prompt=prompt,
@@ -355,11 +295,27 @@ class LLMQueryPlanner:
             plan["order_by"] = [{"field": "MDDate", "desc": False}]
             plan["limit"] = max(plan.get("limit", 1000), 1000)
 
+        if is_count_query and any(term in query_lower for term in ["rose", "rising", "fell", "falling", "declined", "decliners"]):
+            plan["query_type"] = "stats"
+            plan["select_fields"] = []
+            plan["metrics"] = []
+            plan["filters"] = []
+            plan["order_by"] = []
+            plan["aggregations"] = [
+                {"func": "COUNT", "field": "CASE WHEN ChangePct > 0 THEN 1 END", "alias": "RisingCount"},
+                {"func": "COUNT", "field": "CASE WHEN ChangePct < 0 THEN 1 END", "alias": "FallingCount"},
+                {"func": "COUNT", "field": "*", "alias": "TotalCount"},
+            ]
+            plan["limit"] = 1
+
         if any(term in query_lower for term in ["turnover rate", "turnover-rate"]):
             plan["select_fields"] = ["Market", "SecurityID", "Symbol", "ClosePx", "TurnoverRate"]
             plan["metrics"] = []
             plan["order_by"] = [{"field": "TurnoverRate", "desc": True}]
-            plan.setdefault("query_type", "filter" if any(term in query_lower for term in ["above", "over", "greater"]) else "basic")
+            if any(term in query_lower for term in ["above", "over", "greater", ">"]):
+                plan["query_type"] = "filter"
+            else:
+                plan.setdefault("query_type", "basic")
             percent_match = re.search(r"(?:above|over|greater than|>)\s*(\d+(?:\.\d+)?)\s*%?", query_lower)
             if percent_match and "turnoverrate" not in plan_text:
                 plan["filters"] = plan.get("filters", [])
@@ -387,22 +343,6 @@ class LLMQueryPlanner:
         limit_match = re.search(r"\b(?:top|highest|biggest|largest|show)(?:\s+the)?\s+(\d+)\b", query_lower)
         if limit_match:
             plan["limit"] = int(limit_match.group(1))
-
-        if "成交额" in user_query and "TotalValueTrade" not in json.dumps(plan, ensure_ascii=False):
-            plan["select_fields"] = ["Market", "SecurityID", "Symbol", "ClosePx", "TotalValueTrade"]
-            plan["metrics"] = plan.get("metrics", [])
-            plan["filters"] = plan.get("filters", [])
-            plan["order_by"] = [{"field": "TotalValueTrade", "desc": True}]
-            plan.setdefault("limit", 100)
-            plan.setdefault("query_type", "basic")
-
-            match = re.search(r"超过\s*(\d+(?:\.\d+)?)\s*亿", user_query)
-            if match:
-                plan["filters"].append({
-                    "field": "TotalValueTrade",
-                    "op": ">",
-                    "value": float(match.group(1)) * 100000000,
-                })
 
         return plan
 
@@ -531,10 +471,6 @@ Return QueryPlan JSON only:
         return plan
 
 
-# ============================================================================
-# 便捷函数
-# ============================================================================
-
 def generate_query_plan(
     user_query: str,
     default_date: Optional[str] = None,
@@ -547,10 +483,6 @@ def generate_query_plan(
     planner = LLMQueryPlanner(llm_client)
     return planner.generate_plan(user_query, default_date, default_market)
 
-
-# ============================================================================
-# 测试入口
-# ============================================================================
 
 if __name__ == "__main__":
     print("LLM query planner test")
